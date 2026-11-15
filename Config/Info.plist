@@ -33,5 +33,9 @@
 	</array>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<false/>
+	<!-- Conformità all'esportazione: l'app usa soltanto la crittografia del sistema operativo
+	     (CryptoKit: AES-GCM per i dati locali, SHA-256 per il confronto dei file). -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>

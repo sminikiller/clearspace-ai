@@ -85,7 +85,11 @@ Get-Content -Raw "$env:USERPROFILE\Downloads\AuthKey_XXXXXXXXXX.p8" | gh secret 
 gh workflow run TestFlight
 ```
 
-**Dopo il caricamento.** In App Store Connect, scheda TestFlight: rispondi alla domanda sulla conformità all'esportazione (l'app cifra i dati locali con algoritmi standard del sistema) e aggiungi i tester interni.
+**Dopo il caricamento.** Apple elabora la build in qualche minuto, poi la rende disponibile da sola al gruppo di tester interni «Interni» (distribuzione automatica attiva). Chi è nel gruppo la installa dall'app TestFlight, con lo stesso Apple ID. I tester interni sono utenti del team in App Store Connect: per aggiungerne uno va prima inserito in *Utenti e accessi*, poi nel gruppo.
+
+**Conformità all'esportazione.** `Config/Info.plist` dichiara `ITSAppUsesNonExemptEncryption = NO`: l'app usa soltanto la crittografia del sistema operativo (CryptoKit). Così App Store Connect non chiede più la dichiarazione a ogni build. Se un giorno l'app adottasse algoritmi propri o librerie crittografiche di terze parti, questa dichiarazione andrebbe rivista.
+
+Tutto questo riguarda solo TestFlight: nulla arriva sull'App Store finché una versione non viene inviata alla revisione.
 
 La firma usa i certificati gestiti da Apple ("cloud signing"): non servono file `.p12` né profili da caricare, ma la chiave API deve avere il ruolo Amministrazione. Il numero di build è il numero progressivo dell'esecuzione del workflow.
 
