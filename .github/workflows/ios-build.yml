@@ -5,7 +5,12 @@ name: iOS build
 on:
   push:
     branches: [main]
+    # Le modifiche alla sola documentazione non consumano minuti macOS.
+    paths-ignore:
+      - "**.md"
   pull_request:
+    paths-ignore:
+      - "**.md"
   workflow_dispatch:
 
 concurrency:

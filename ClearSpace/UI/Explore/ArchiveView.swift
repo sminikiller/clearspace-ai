@@ -92,7 +92,7 @@ struct YearDetailView: View {
                         ProgressView()
                             .frame(maxWidth: .infinity)
                     } else {
-                        Label("Rivedi tutto il \(String(year))", systemImage: "hand.draw")
+                        ButtonTitle("Rivedi tutto il \(String(year))", systemImage: "hand.draw")
                             .frame(maxWidth: .infinity)
                     }
                 }

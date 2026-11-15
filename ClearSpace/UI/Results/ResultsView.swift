@@ -52,7 +52,9 @@ struct ResultsView: View {
     private var spaceSection: some View {
         Section {
             DetailRow(label: "Sull'iPhone", value: Format.bytes(stats.deviceBytesFreed))
-            DetailRow(label: "Su iCloud", value: Format.bytes(stats.cloudBytesFreed))
+            if stats.cloudBytesFreed > 0 || stats.conditionalCloudBytes == 0 {
+                DetailRow(label: "Su iCloud", value: Format.bytes(stats.cloudBytesFreed))
+            }
             if stats.conditionalCloudBytes > 0 {
                 DetailRow(label: "Su iCloud, se Foto di iCloud è attivo", value: "fino a \(Format.bytes(stats.conditionalCloudBytes))")
             }

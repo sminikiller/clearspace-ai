@@ -3,12 +3,10 @@ import Foundation
 /// Formattazione uniforme di dimensioni, date e durate.
 enum Format {
 
-    private static let byteFormatter: ByteCountFormatter = {
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        formatter.allowedUnits = [.useKB, .useMB, .useGB, .useTB]
-        return formatter
-    }()
+    private static let italian = Locale(identifier: "it_IT")
+
+    /// Unità decimali, come nelle Impostazioni di iOS: 1 MB = 1.000.000 byte.
+    private static let byteUnits = ["KB", "MB", "GB", "TB"]
 
     private static let mediumDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -41,11 +39,38 @@ enum Format {
         return formatter
     }()
 
-    /// "18,4 GB". Per valori nulli o negativi restituisce "0 KB".
+    /// "18,4 GB", con le convenzioni italiane qualunque sia la lingua del dispositivo
+    /// (`ByteCountFormatter` seguirebbe quella del dispositivo e scriverebbe "18.4 GB").
+    /// Per valori nulli o negativi restituisce "0 KB"; una dimensione non nulla non diventa mai "0 KB".
     static func bytes(_ value: Int64?) -> String {
         let safe = max(0, value ?? 0)
         if safe == 0 { return "0 KB" }
-        return byteFormatter.string(fromByteCount: safe)
+        var amount = Double(safe) / 1_000
+        var unit = 0
+        // 999,5 e oltre verrebbe arrotondato a 1000: meglio passare all'unità successiva.
+        while amount >= 999.5 && unit < byteUnits.count - 1 {
+            amount /= 1_000
+            unit += 1
+        }
+        let digits: Int
+        switch unit {
+        case 0: digits = 0                      // 512 KB
+        case 1: digits = 1                      // 2,8 MB
+        case 2: digits = amount < 10 ? 2 : 1    // 1,25 GB · 46,3 GB
+        default: digits = 2                     // 1,05 TB
+        }
+        if digits == 0 { amount = max(1, amount) }
+        return "\(decimal(amount, maximumFractionDigits: digits)) \(byteUnits[unit])"
+    }
+
+    /// Numero con la virgola decimale e senza zeri finali: 2.80 → "2,8", 5.0 → "5".
+    static func decimal(_ value: Double, maximumFractionDigits digits: Int) -> String {
+        var text = String(format: "%.\(max(0, digits))f", locale: italian, value)
+        if digits > 0 {
+            while text.hasSuffix("0") { text.removeLast() }
+            if text.hasSuffix(",") { text.removeLast() }
+        }
+        return text
     }
 
     /// Come `bytes`, ma mostra "—" quando la dimensione non è nota.
@@ -54,9 +79,12 @@ enum Format {
         return bytes(value)
     }
 
+    /// Per i valori in evidenza: "296,4 GB". Sotto 1 GB usa l'unità più adatta ("12,9 MB")
+    /// invece di mostrare "0,0 GB".
     static func gigabytes(_ value: Int64) -> String {
+        guard value >= AppConfiguration.Thresholds.gigabyte else { return bytes(value) }
         let gb = Double(value) / Double(AppConfiguration.Thresholds.gigabyte)
-        return String(format: "%.1f GB", locale: Locale(identifier: "it_IT"), gb)
+        return "\(decimal(gb, maximumFractionDigits: 1)) GB"
     }
 
     static func date(_ date: Date?) -> String {
@@ -103,6 +131,6 @@ enum Format {
     static func megapixels(width: Int, height: Int) -> String {
         guard width > 0, height > 0 else { return "—" }
         let megapixel = Double(width * height) / 1_000_000
-        return "\(width) × \(height) (\(String(format: "%.1f", megapixel)) MP)"
+        return "\(width) × \(height) (\(decimal(megapixel, maximumFractionDigits: 1)) MP)"
     }
 }

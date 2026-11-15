@@ -262,12 +262,18 @@ struct ReportSummarySections: View {
 
         Section {
             DetailRow(label: "Sull'iPhone", value: Format.bytes(report.deviceBytesFreed))
-            DetailRow(label: "Su iCloud", value: Format.bytes(report.cloudBytesFreed))
+            // Con il solo valore condizionato, una riga "Su iCloud: 0 KB" sembrerebbe contraddirlo.
+            if report.cloudBytesFreed > 0 || report.conditionalCloudBytes == 0 {
+                DetailRow(label: "Su iCloud", value: Format.bytes(report.cloudBytesFreed))
+            }
             if report.conditionalCloudBytes > 0 {
                 DetailRow(label: "Su iCloud, se Foto di iCloud è attivo", value: "fino a \(Format.bytes(report.conditionalCloudBytes))")
             }
-            if let delta = report.measuredDeviceDelta {
-                DetailRow(label: "Variazione misurata dello spazio libero", value: signedBytes(delta))
+            // Subito dopo l'eliminazione lo spazio libero può non essere ancora aumentato, o persino
+            // essere sceso per l'attività del sistema: si riporta solo un aumento realmente misurato.
+            // I valori prima/dopo restano consultabili nella scheda Risultati.
+            if let delta = report.measuredDeviceDelta, delta > 0 {
+                DetailRow(label: "Aumento misurato dello spazio libero", value: "+\(Format.bytes(delta))")
             }
         } header: {
             Text("Spazio recuperato")
@@ -299,10 +305,5 @@ struct ReportSummarySections: View {
             Text(Format.count(count))
                 .font(.body.weight(.semibold))
         }
-    }
-
-    private func signedBytes(_ value: Int64) -> String {
-        if value == 0 { return "0 KB" }
-        return (value > 0 ? "+" : "−") + Format.bytes(abs(value))
     }
 }

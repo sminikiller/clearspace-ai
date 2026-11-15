@@ -17,8 +17,10 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 60
     env:
-      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      # Identificativi (non segreti): variabili del repository, con i segreti omonimi come alternativa.
+      ASC_KEY_ID: ${{ vars.ASC_KEY_ID || secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ vars.ASC_ISSUER_ID || secrets.ASC_ISSUER_ID }}
+      # L'unico vero segreto: il contenuto del file .p8.
       ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
       TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
       BUNDLE_ID: ${{ vars.APP_BUNDLE_ID }}
@@ -46,7 +48,8 @@ jobs:
       - name: Prepara la chiave di App Store Connect
         run: |
           mkdir -p "$RUNNER_TEMP/keys"
-          printf '%s\n' "$ASC_PRIVATE_KEY" > "$RUNNER_TEMP/keys/AuthKey_${ASC_KEY_ID}.p8"
+          # Toglie gli eventuali ritorni a capo di Windows aggiunti salvando il segreto da PowerShell.
+          printf '%s\n' "$ASC_PRIVATE_KEY" | tr -d '\r' > "$RUNNER_TEMP/keys/AuthKey_${ASC_KEY_ID}.p8"
           chmod 600 "$RUNNER_TEMP/keys/AuthKey_${ASC_KEY_ID}.p8"
 
       - name: Archivio (senza firma)

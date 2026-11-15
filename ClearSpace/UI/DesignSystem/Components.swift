@@ -165,6 +165,27 @@ struct LockedFeatureView: View {
     }
 }
 
+/// Icona e titolo per i pulsanti. Dentro un elenco `Label` colora l'icona con la tinta dell'app:
+/// su un pulsante a sfondo pieno diventa invisibile, su uno distruttivo stona con il testo rosso.
+/// Qui icona e testo prendono entrambi il colore del pulsante.
+struct ButtonTitle: View {
+    let title: String
+    let systemImage: String
+
+    init(_ title: String, systemImage: String) {
+        self.title = title
+        self.systemImage = systemImage
+    }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: systemImage)
+                .accessibilityHidden(true)
+            Text(title)
+        }
+    }
+}
+
 /// Riga "etichetta: valore" con il valore allineato a destra.
 struct DetailRow: View {
     let label: String

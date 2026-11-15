@@ -37,17 +37,45 @@ final class SmokeTests: XCTestCase {
         return app.descendants(matching: .any).matching(predicate).firstMatch
     }
 
-    /// Scorre la schermata, prima in giù e poi in su, finché l'elemento non è toccabile.
+    /// Vero se l'elemento è visibile lontano dalle barre in alto e in basso. Sotto le barre traslucide
+    /// un elemento risulta comunque toccabile, ma il tocco finisce sulla barra e non apre nulla.
+    private func isComfortablyVisible(_ element: XCUIElement) -> Bool {
+        guard element.exists, element.isHittable else { return false }
+        let screen = app.windows.firstMatch.frame
+        let middle = element.frame.midY
+        return middle > screen.minY + 130 && middle < screen.maxY - 110
+    }
+
+    /// Trascina il contenuto senza inerzia, di una frazione dell'altezza dello schermo.
+    /// Valori positivi mostrano ciò che sta più in basso.
+    private func scroll(by fraction: CGFloat) {
+        let window = app.windows.firstMatch
+        let start = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let end = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5 - fraction))
+        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.3)
+    }
+
+    /// Porta l'elemento nella zona centrale dello schermo. Se non è ancora in elenco
+    /// lo cerca prima più in basso e poi più in alto.
     private func bringIntoView(_ element: XCUIElement) {
-        var attempts = 0
-        while !(element.exists && element.isHittable) && attempts < 5 {
-            app.swipeUp()
-            attempts += 1
-        }
-        attempts = 0
-        while !(element.exists && element.isHittable) && attempts < 10 {
-            app.swipeDown()
-            attempts += 1
+        var step = 0
+        var stalled = 0
+        while !isComfortablyVisible(element) && step < 16 && stalled < 2 {
+            let previous = element.exists ? element.frame : CGRect.null
+            if element.exists {
+                let screen = app.windows.firstMatch.frame
+                let distance = (element.frame.midY - screen.midY) / max(screen.height, 1)
+                scroll(by: min(0.45, max(-0.45, distance)))
+            } else {
+                scroll(by: step < 5 ? 0.4 : -0.4)
+            }
+            // Fine del contenuto: l'elemento non si sposta più.
+            if element.exists && element.frame == previous {
+                stalled += 1
+            } else {
+                stalled = 0
+            }
+            step += 1
         }
     }
 
@@ -95,8 +123,17 @@ final class SmokeTests: XCTestCase {
         pause(1)
     }
 
+    /// Titolo della schermata in primo piano: serve a capire se un tocco ne ha aperta un'altra.
+    private var currentTitle: String {
+        let bar = app.navigationBars.firstMatch
+        return bar.exists ? bar.identifier : ""
+    }
+
+    /// Torna alla schermata precedente. Va chiamata solo dopo aver verificato che se ne sia aperta una.
     private func goBack() {
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        let back = app.navigationBars.buttons.element(boundBy: 0)
+        guard back.waitForExistence(timeout: 3) else { return }
+        back.tap()
         pause(0.8)
     }
 
@@ -280,11 +317,14 @@ final class SmokeTests: XCTestCase {
         visitFromList("Archivio storico", name: "28-archivio-storico")
         visitFromList("Documenti e file", name: "29-documenti")
         visitFromList("Audio e registrazioni", name: "30-audio")
+        visitFromList("Modalità viaggio", name: "31-modalita-viaggio")
+        visitFromList("Modalità nostalgia", name: "32-modalita-nostalgia")
 
         // Analizza → trasparenza su cosa permette iOS
         app.tabBars.buttons["Analizza"].tap()
         pause(1)
-        visitFromList("Cosa può fare ClearSpace", name: "31-cosa-permette-ios")
+        capture("33-analizza")
+        visitFromList("Cosa può fare ClearSpace", name: "34-cosa-permette-ios")
     }
 
     private func visitFromHome(_ prefix: String, title: String, name: String) {
@@ -295,7 +335,10 @@ final class SmokeTests: XCTestCase {
             return
         }
         link.tap()
-        XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 10), "Schermata non aperta: \(title)")
+        guard app.navigationBars[title].waitForExistence(timeout: 10) else {
+            XCTFail("Schermata non aperta: \(title)")
+            return
+        }
         pause(1)
         capture(name)
         goBack()
@@ -308,8 +351,13 @@ final class SmokeTests: XCTestCase {
             XCTFail("Voce non trovata: \(prefix)")
             return
         }
+        let origin = currentTitle
         link.tap()
         pause(1.5)
+        guard currentTitle != origin else {
+            XCTFail("La schermata non si è aperta: \(prefix)")
+            return
+        }
         capture(name)
         goBack()
     }

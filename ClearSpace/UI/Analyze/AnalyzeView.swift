@@ -70,21 +70,21 @@ struct AnalyzeView: View {
                     Button {
                         scan.resume()
                     } label: {
-                        Label("Riprendi", systemImage: "play.fill")
+                        ButtonTitle("Riprendi", systemImage: "play.fill")
                     }
                     .buttonStyle(.borderedProminent)
                 } else {
                     Button {
                         scan.pause()
                     } label: {
-                        Label("Pausa", systemImage: "pause.fill")
+                        ButtonTitle("Pausa", systemImage: "pause.fill")
                     }
                     .buttonStyle(.bordered)
                 }
                 Button(role: .destructive) {
                     scan.cancel()
                 } label: {
-                    Label("Interrompi", systemImage: "stop.fill")
+                    ButtonTitle("Interrompi", systemImage: "stop.fill")
                 }
                 .buttonStyle(.bordered)
             }
@@ -93,13 +93,13 @@ struct AnalyzeView: View {
                 Button {
                     scan.start(deep: true)
                 } label: {
-                    Label("Analisi completa", systemImage: "sparkle.magnifyingglass")
+                    ButtonTitle("Analisi completa", systemImage: "sparkle.magnifyingglass")
                 }
                 .buttonStyle(.borderedProminent)
                 Button {
                     scan.start(deep: false)
                 } label: {
-                    Label("Rapida", systemImage: "hare")
+                    ButtonTitle("Rapida", systemImage: "hare")
                 }
                 .buttonStyle(.bordered)
             }

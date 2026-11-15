@@ -3,7 +3,7 @@
 # (`brew install xcodegen && xcodegen generate`) se Xcode non riuscisse ad aprirlo.
 name: ClearSpace
 options:
-  bundleIdPrefix: com.example
+  bundleIdPrefix: com.sminikiller
   developmentLanguage: it
   deploymentTarget:
     iOS: "17.0"
@@ -20,7 +20,7 @@ targets:
       - ClearSpace
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.ClearSpace
+        PRODUCT_BUNDLE_IDENTIFIER: com.sminikiller.clearspace
         TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_FILE: Config/Info.plist
@@ -41,7 +41,7 @@ targets:
       - target: ClearSpace
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.ClearSpaceTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.sminikiller.clearspace.tests
         GENERATE_INFOPLIST_FILE: YES
   ClearSpaceUITests:
     type: bundle.ui-testing
@@ -52,7 +52,7 @@ targets:
       - target: ClearSpace
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.ClearSpaceUITests
+        PRODUCT_BUNDLE_IDENTIFIER: com.sminikiller.clearspace.uitests
         GENERATE_INFOPLIST_FILE: YES
         TEST_TARGET_NAME: ClearSpace
 schemes:
