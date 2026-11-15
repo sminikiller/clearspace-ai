@@ -41,6 +41,17 @@
                ReferencedContainer = "container:ClearSpace.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "C5000000000000000000E001"
+               BuildableName = "ClearSpaceUITests.xctest"
+               BlueprintName = "ClearSpaceUITests"
+               ReferencedContainer = "container:ClearSpace.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

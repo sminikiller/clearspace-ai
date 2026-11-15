@@ -108,7 +108,12 @@ final class VideoCompressionService {
         guard let source = await loadAVAsset(identifier: item.sourceIdentifier, allowNetwork: allowNetwork) else {
             throw CompressionError.assetUnavailable
         }
-        guard AVAssetExportSession.exportPresets(compatibleWith: source).contains(preset.exportPresetName),
+        let isCompatible = await AVAssetExportSession.compatibility(
+            ofExportPreset: preset.exportPresetName,
+            with: source,
+            outputFileType: .mp4
+        )
+        guard isCompatible,
               let session = AVAssetExportSession(asset: source, presetName: preset.exportPresetName) else {
             throw CompressionError.presetUnsupported
         }

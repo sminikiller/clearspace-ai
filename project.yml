@@ -43,6 +43,18 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.ClearSpaceTests
         GENERATE_INFOPLIST_FILE: YES
+  ClearSpaceUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - ClearSpaceUITests
+    dependencies:
+      - target: ClearSpace
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.ClearSpaceUITests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: ClearSpace
 schemes:
   ClearSpace:
     build:
@@ -54,5 +66,6 @@ schemes:
       config: Debug
       targets:
         - ClearSpaceTests
+        - ClearSpaceUITests
     archive:
       config: Release

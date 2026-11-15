@@ -1,5 +1,5 @@
-# Compila l'app e avvia i test unitari su un runner macOS di GitHub.
-# I log completi vengono salvati come artefatti; nel riepilogo compaiono solo errori e risultati.
+# Compila l'app, esegue i test unitari e una prova d'uso sul simulatore, su un runner macOS di GitHub.
+# Nel riepilogo compaiono solo errori e risultati; log completi e schermate sono salvati come artefatti.
 name: iOS build
 
 on:
@@ -49,8 +49,9 @@ jobs:
             > build.log 2>&1
           STATUS=$?
           echo "Errori distinti: $(grep -E 'error:' build.log | sort -u | wc -l | tr -d ' ')"
-          echo "Avvisi distinti: $(grep -E 'warning:' build.log | sort -u | wc -l | tr -d ' ')"
+          echo "Avvisi distinti: $(grep -E 'warning:' build.log | grep -v appintentsmetadataprocessor | sort -u | wc -l | tr -d ' ')"
           grep -E "error:" build.log | sed "s#$GITHUB_WORKSPACE/##" | sort -u | head -400
+          grep -E "warning:" build.log | grep -v appintentsmetadataprocessor | sed "s#$GITHUB_WORKSPACE/##" | sort -u | head -60
           tail -n 3 build.log
           exit $STATUS
 
@@ -62,20 +63,65 @@ jobs:
             -scheme ClearSpace \
             -destination "id=$DEVICE_ID" \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -only-testing:ClearSpaceTests \
+            -parallel-testing-enabled NO \
             > test.log 2>&1
           STATUS=$?
-          grep -E "error:|Test Case .* failed|Test Suite 'All tests'|Executed [0-9]+ tests" test.log \
-            | sed "s#$GITHUB_WORKSPACE/##" | sort -u | head -300
-          tail -n 3 test.log
+          echo "Test passati: $(grep -ciE 'test case .* passed' test.log)"
+          echo "Test falliti: $(grep -ciE 'test case .* failed' test.log)"
+          grep -iE "error:|test case .* failed" test.log | sed "s#$GITHUB_WORKSPACE/##" | sort -u | head -200
+          grep -E "TEST EXECUTE" test.log
           exit $STATUS
 
-      - name: Salva i log completi
+      - name: Prova d'uso sul simulatore
+        run: |
+          set +e
+          xcodebuild test-without-building \
+            -project ClearSpace.xcodeproj \
+            -scheme ClearSpace \
+            -destination "id=$DEVICE_ID" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -only-testing:ClearSpaceUITests \
+            -parallel-testing-enabled NO \
+            -resultBundlePath "$RUNNER_TEMP/UITests.xcresult" \
+            > uitest.log 2>&1
+          STATUS=$?
+          echo "Prove passate: $(grep -ciE 'test case .* passed' uitest.log)"
+          echo "Prove fallite: $(grep -ciE 'test case .* failed' uitest.log)"
+          grep -iE "error:|test case .* failed" uitest.log | sed "s#$GITHUB_WORKSPACE/##" | sort -u | head -100
+          grep -E "TEST EXECUTE" uitest.log
+          exit $STATUS
+
+      - name: Esporta le schermate
+        if: always()
+        run: |
+          mkdir -p shots
+          xcrun xcresulttool export attachments \
+            --path "$RUNNER_TEMP/UITests.xcresult" \
+            --output-path shots || echo "Esportazione delle schermate non riuscita"
+          python3 - <<'PY'
+          import json, os, re
+          manifest = os.path.join("shots", "manifest.json")
+          if os.path.exists(manifest):
+              for test in json.load(open(manifest)):
+                  for item in test.get("attachments", []):
+                      source = os.path.join("shots", item.get("exportedFileName", ""))
+                      label = item.get("suggestedHumanReadableName") or ""
+                      label = re.sub(r"_\d+_[0-9A-Fa-f-]{36}(?=\.\w+$)", "", label)
+                      if os.path.isfile(source) and label:
+                          os.replace(source, os.path.join("shots", re.sub(r"[^\w.\-]", "_", label)))
+          PY
+          ls shots | head -80
+
+      - name: Salva schermate e log completi
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: xcodebuild-logs
+          name: risultati
           path: |
             build.log
             test.log
+            uitest.log
+            shots
           if-no-files-found: ignore
           retention-days: 7
