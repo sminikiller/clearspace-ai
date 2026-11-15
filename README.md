@@ -8,20 +8,21 @@ App iOS nativa (Swift, SwiftUI) per la pulizia e l'organizzazione di iPhone e iC
 
 ## Stato del progetto: da leggere prima di tutto
 
-Il codice è stato scritto su Windows, dove Xcode non esiste. **Non è mai stato compilato né eseguito.**
+Il codice è stato scritto su Windows, dove Xcode non esiste. Compilazione, test e prova d'uso avvengono su GitHub Actions, su un runner macOS con Xcode 26 e un simulatore di iPhone con iOS 26.
 
-Cosa è stato verificato qui:
+Verificato a ogni modifica del codice (ultimo esito: tutto superato):
 
-- struttura del file di progetto Xcode, validità di plist, schema e cataloghi di risorse;
-- controlli statici automatici su tutti i sorgenti: parentesi bilanciate, etichette degli argomenti di funzioni e inizializzatori, membri dei tipi, `switch` esaustivi, `import` necessari.
+- compilazione di app e test senza errori;
+- 85 test unitari sulla logica: regole di sicurezza, piano di eliminazione, sessioni, ricerca, analisi, pianificazione, formati;
+- prova d'uso automatica sul simulatore: introduzione, permesso per Foto, analisi completa fino al termine, swipe e pulsanti, annullamento, dettagli, revisione, conferma, eliminazione reale di due foto di prova ed esito; poi un giro di tutte le altre schermate, con una schermata salvata a ogni passo.
 
 Cosa **non** è stato verificato:
 
-- la compilazione vera e propria (tipi, API dei framework Apple, concorrenza);
-- il comportamento su un dispositivo reale;
-- i test unitari, che sono scritti ma non sono mai stati eseguiti.
+- il comportamento su un iPhone reale e con una libreria grande: prestazioni, memoria, durata dell'analisi, originali presenti solo su iCloud;
+- le funzioni su file e cartelle (documenti, iCloud Drive, audio, compressione dei video): il simulatore della prova contiene soltanto sei foto, quindi di queste schermate è verificato l'aspetto, non l'uso con contenuti veri;
+- duplicati e foto simili su casi reali: le sei foto di prova sono tutte diverse.
 
-Al primo build è normale aspettarsi alcuni errori di compilazione da correggere. Le soglie numeriche delle analisi (sfocatura, somiglianza, silenzi) sono punti di partenza ragionevoli e vanno tarate su librerie reali.
+Le soglie numeriche delle analisi (sfocatura, somiglianza, silenzi) sono punti di partenza ragionevoli e vanno tarate su librerie reali.
 
 ---
 
@@ -34,7 +35,7 @@ Al primo build è normale aspettarsi alcuni errori di compilazione da correggere
 ## Come compilare
 
 1. Apri `ClearSpace.xcodeproj`.
-2. Nel target **ClearSpace**, scheda *Signing & Capabilities*, scegli il tuo team e sostituisci l'identificativo `com.example.ClearSpace` con uno tuo.
+2. Nel target **ClearSpace**, scheda *Signing & Capabilities*, scegli il tuo team. L'identificativo dell'app è `com.sminikiller.clearspace`, già registrato nell'account sviluppatore.
 3. Seleziona un simulatore o un iPhone e premi Esegui.
 
 Se Xcode non riuscisse ad aprire il progetto, puoi rigenerarlo con [XcodeGen](https://github.com/yonaskolb/XcodeGen) a partire da `project.yml`:
@@ -53,33 +54,42 @@ Il repository contiene due workflow, che girano su runner macOS di GitHub.
 
 | Workflow | Quando parte | Cosa fa |
 | --- | --- | --- |
-| `iOS build` | a ogni push su `main`, sulle pull request, a mano | compila app e test per il simulatore ed esegue i test unitari |
+| `iOS build` | a ogni push su `main` e sulle pull request che toccano il codice, oppure a mano | compila app e test per il simulatore, esegue i test unitari e la prova d'uso automatica |
 | `TestFlight` | solo a mano | crea l'archivio di distribuzione, lo firma e lo carica su App Store Connect |
 
-Nel riepilogo di ogni esecuzione compaiono solo errori e risultati; i log completi di `xcodebuild` sono allegati come artefatti. Nei repository privati i minuti macOS di GitHub sono limitati e contano dieci volte: se si esauriscono, rendere pubblico il repository li rende gratuiti.
+Nel riepilogo di ogni esecuzione compaiono solo errori e risultati; i log completi di `xcodebuild` e le schermate della prova d'uso sono allegati come artefatto `risultati`. Le modifiche ai soli file `.md` non avviano la compilazione. Nei repository privati i minuti macOS di GitHub sono limitati e contano dieci volte: se si esauriscono, rendere pubblico il repository li rende gratuiti.
+
+La prova d'uso (`ClearSpaceUITests/SmokeTests.swift`) usa l'app sul simulatore come farebbe una persona: completa l'introduzione, concede l'accesso a Foto, attende la fine dell'analisi, rivede le foto con gli swipe e con i pulsanti, annulla una scelta, apre i dettagli, passa dalla Revisione alla conferma, elimina davvero due foto di prova (compreso l'avviso di sistema di iOS) e controlla l'esito. Un secondo giro apre le altre schermate. Ogni passo salva una schermata.
 
 ### TestFlight
 
-Il caricamento richiede dati che solo il titolare dell'account Apple può fornire.
+Configurazione attuale (già fatta per questo repository):
 
-1. **Apple Developer Program.** Serve l'iscrizione a pagamento.
-2. **Identificativo e app.** In *Certificates, Identifiers & Profiles* registra un identificativo (ad esempio `it.tuonome.clearspace`), poi in App Store Connect crea l'app con quell'identificativo.
-3. **Chiave API.** In App Store Connect, *Utenti e accessi → Integrazioni → API di App Store Connect*, genera una chiave del team con ruolo **Admin**. Scarica il file `.p8` (si può fare una sola volta) e annota l'ID della chiave e l'ID dell'emittente.
-4. **Variabili e segreti del repository.** Dalla cartella del progetto:
+| Dato | Dove sta | Valore |
+| --- | --- | --- |
+| Identificativo dell'app | variabile `APP_BUNDLE_ID` | `com.sminikiller.clearspace`, registrato in *Certificates, Identifiers & Profiles* |
+| Team | variabile `APPLE_TEAM_ID` | ID del team sviluppatore |
+| App in App Store Connect | — | «ClearSpace AI», iOS, lingua principale italiano, SKU `clearspace-ai` |
+| Chiave API | variabili `ASC_KEY_ID`, `ASC_ISSUER_ID` | chiave del team «GitHub Actions ClearSpace», ruolo Amministrazione |
+| Chiave privata | segreto `ASC_PRIVATE_KEY` | contenuto del file `.p8`, scaricabile una sola volta |
 
-   ```powershell
-   gh variable set APPLE_TEAM_ID --body "IL_TUO_TEAM_ID"
-   gh variable set APP_BUNDLE_ID --body "it.tuonome.clearspace"
-   gh secret set ASC_KEY_ID
-   gh secret set ASC_ISSUER_ID
-   Get-Content .\AuthKey_XXXXXXXXXX.p8 -Raw | gh secret set ASC_PRIVATE_KEY
-   ```
+Gli ID non sono segreti e stanno tra le variabili. L'unico segreto è il file `.p8`: va caricato dal titolare dell'account, senza copiarlo in file o messaggi.
 
-   `gh secret set` senza valore chiede di incollarlo: i segreti non vanno scritti in chiaro in file o messaggi.
-5. **Avvio.** Scheda *Actions → TestFlight → Run workflow*, oppure `gh workflow run TestFlight`.
-6. **Dopo il caricamento.** In App Store Connect, scheda TestFlight: rispondi alla domanda sulla conformità all'esportazione (l'app cifra i dati locali con algoritmi standard del sistema) e aggiungi i tester interni.
+```powershell
+Get-Content -Raw "$env:USERPROFILE\Downloads\AuthKey_XXXXXXXXXX.p8" | gh secret set ASC_PRIVATE_KEY
+```
 
-La firma usa i certificati gestiti da Apple: non servono file `.p12` né profili da caricare. Il numero di build è il numero progressivo dell'esecuzione del workflow. Questo workflow non è ancora stato eseguito: senza i dati dell'account Apple non è possibile provarlo.
+**Avvio.** Scheda *Actions → TestFlight → Run workflow*, oppure:
+
+```powershell
+gh workflow run TestFlight
+```
+
+**Dopo il caricamento.** In App Store Connect, scheda TestFlight: rispondi alla domanda sulla conformità all'esportazione (l'app cifra i dati locali con algoritmi standard del sistema) e aggiungi i tester interni.
+
+La firma usa i certificati gestiti da Apple ("cloud signing"): non servono file `.p12` né profili da caricare, ma la chiave API deve avere il ruolo Amministrazione. Il numero di build è il numero progressivo dell'esecuzione del workflow.
+
+Per rifare la configurazione da zero su un altro account: registra un identificativo, crea l'app in App Store Connect, genera una chiave API del team in *Utenti e accessi → Integrazioni → API di App Store Connect* e imposta le quattro variabili con `gh variable set NOME --body "valore"`.
 
 ---
 
@@ -88,6 +98,8 @@ La firma usa i certificati gestiti da Apple: non servono file `.p12` né profili
 ```
 ClearSpace.xcodeproj/        progetto Xcode
 Config/Info.plist            permessi, attività in background, tipi di documento
+Config/ExportOptions.plist   opzioni di esportazione per App Store Connect
+.github/workflows/           compilazione, test e caricamento su TestFlight
 project.yml                  definizione XcodeGen di riserva
 ClearSpace/
   App/                       punto d'ingresso
@@ -97,10 +109,11 @@ ClearSpace/
   Services/                  Foto, file, audio, video, sistema, piani
   UI/                        schermate SwiftUI
   Resources/                 icona, colore principale, manifest della privacy
-ClearSpaceTests/             79 test unitari sulla logica
+ClearSpaceTests/             test unitari sulla logica
+ClearSpaceUITests/           prova d'uso automatica sul simulatore
 ```
 
-80 file Swift per l'app (circa 16.700 righe) e 5 file di test.
+80 file Swift per l'app (circa 16.700 righe), 6 file di test unitari e 1 di prova d'uso.
 
 ## Architettura
 
