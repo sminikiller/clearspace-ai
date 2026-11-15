@@ -1,0 +1,218 @@
+import Foundation
+
+/// Scelta espressa con uno swipe (o con il pulsante equivalente).
+enum SwipeChoice: String, Codable, Sendable {
+    case keep
+    case delete
+    case postpone
+}
+
+/// Passi della pulizia guidata, nell'ordine in cui vengono proposti.
+enum GuidedStepKind: String, Codable, CaseIterable, Identifiable, Sendable {
+    case screenshots
+    case similarPhotos
+    case videos
+    case documents
+    case audio
+    case otherApps
+    case iCloud
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .screenshots: return "Screenshot"
+        case .similarPhotos: return "Foto simili e duplicate"
+        case .videos: return "Video"
+        case .documents: return "Documenti e download"
+        case .audio: return "Audio e registrazioni"
+        case .otherApps: return "Altre app"
+        case .iCloud: return "iCloud"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .screenshots: return "Schermate vecchie, ricevute e conversazioni"
+        case .similarPhotos: return "Raffiche, scatti consecutivi e copie"
+        case .videos: return "Video grandi e registrazioni dello schermo"
+        case .documents: return "File duplicati, pesanti e scaricati"
+        case .audio: return "Registrazioni lunghe o ripetute"
+        case .otherApps: return "Consigli per WhatsApp, Telegram, streaming e altre app"
+        case .iCloud: return "Backup, dati delle app e copie locali"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .screenshots: return "camera.viewfinder"
+        case .similarPhotos: return "square.on.square"
+        case .videos: return "video"
+        case .documents: return "doc.on.doc"
+        case .audio: return "waveform"
+        case .otherApps: return "square.grid.2x2"
+        case .iCloud: return "icloud"
+        }
+    }
+
+    /// I passi finali sono consigli guidati, non sessioni di swipe.
+    var usesSwipe: Bool {
+        self != .otherApps && self != .iCloud
+    }
+}
+
+/// Modalità con cui è stata avviata una sessione.
+enum CleanupMode: Codable, Hashable, Sendable {
+    case quick
+    case guided(step: GuidedStepKind)
+    case advanced
+    case annual(year: Int)
+    case collection(id: String)
+    case goal(targetBytes: Int64)
+    case group
+    case search(query: String)
+    case custom
+
+    var label: String {
+        switch self {
+        case .quick: return "Pulizia rapida"
+        case .guided: return "Pulizia guidata"
+        case .advanced: return "Pulizia avanzata"
+        case .annual(let year): return "Pulizia annuale \(year)"
+        case .collection: return "Categoria"
+        case .goal: return "Pulizia per obiettivo"
+        case .group: return "Gruppo"
+        case .search: return "Ricerca"
+        case .custom: return "Selezione"
+        }
+    }
+}
+
+/// Decisione registrata in una sessione; conserva lo stato precedente per poterla annullare.
+struct SwipeDecision: Codable, Hashable, Sendable {
+    let itemID: UUID
+    let choice: SwipeChoice
+    let previousStatus: ReviewStatus
+    let bytes: Int64
+    let date: Date
+}
+
+/// Sessione di pulizia. Viene salvata a ogni decisione, quindi può essere ripresa in qualsiasi momento.
+struct CleanupSession: Identifiable, Codable, Hashable, Sendable {
+    let id: UUID
+    var title: String
+    var mode: CleanupMode
+    var queue: [UUID]
+    var cursor: Int
+    var decisions: [SwipeDecision]
+    var goalBytes: Int64?
+    var createdAt: Date
+    var updatedAt: Date
+    var isCompleted: Bool
+
+    init(
+        id: UUID = UUID(),
+        title: String,
+        mode: CleanupMode,
+        queue: [UUID],
+        goalBytes: Int64? = nil,
+        now: Date = Date()
+    ) {
+        self.id = id
+        self.title = title
+        self.mode = mode
+        self.queue = queue
+        self.cursor = 0
+        self.decisions = []
+        self.goalBytes = goalBytes
+        self.createdAt = now
+        self.updatedAt = now
+        self.isCompleted = false
+    }
+
+    var currentItemID: UUID? {
+        itemID(atOffset: 0)
+    }
+
+    func itemID(atOffset offset: Int) -> UUID? {
+        let index = cursor + offset
+        guard index >= 0, index < queue.count else { return nil }
+        return queue[index]
+    }
+
+    var isFinished: Bool { cursor >= queue.count }
+    var remainingCount: Int { max(0, queue.count - cursor) }
+
+    var progress: Double {
+        guard !queue.isEmpty else { return 1 }
+        return min(1, Double(cursor) / Double(queue.count))
+    }
+
+    var keptCount: Int { count(of: .keep) }
+    var markedCount: Int { count(of: .delete) }
+    var postponedCount: Int { count(of: .postpone) }
+
+    /// Spazio potenziale degli elementi proposti per l'eliminazione in questa sessione.
+    var markedBytes: Int64 {
+        decisions.reduce(0) { $0 + ($1.choice == .delete ? $1.bytes : 0) }
+    }
+
+    var postponedIDs: [UUID] {
+        decisions.filter { $0.choice == .postpone }.map { $0.itemID }
+    }
+
+    var goalProgress: Double? {
+        guard let goalBytes, goalBytes > 0 else { return nil }
+        return min(1, Double(markedBytes) / Double(goalBytes))
+    }
+
+    var goalReached: Bool {
+        guard let goalBytes, goalBytes > 0 else { return false }
+        return markedBytes >= goalBytes
+    }
+
+    private func count(of choice: SwipeChoice) -> Int {
+        decisions.reduce(0) { $0 + ($1.choice == choice ? 1 : 0) }
+    }
+
+    /// Registra la decisione sull'elemento corrente e passa al successivo.
+    mutating func record(_ choice: SwipeChoice, previousStatus: ReviewStatus, bytes: Int64, at date: Date = Date()) {
+        guard let itemID = currentItemID else { return }
+        decisions.append(
+            SwipeDecision(itemID: itemID, choice: choice, previousStatus: previousStatus, bytes: bytes, date: date)
+        )
+        cursor += 1
+        updatedAt = date
+    }
+
+    /// Salta l'elemento corrente senza registrare decisioni (es. file non più disponibile).
+    mutating func skipCurrent(at date: Date = Date()) {
+        guard !isFinished else { return }
+        cursor += 1
+        updatedAt = date
+    }
+
+    /// Annulla l'ultima decisione e riporta il cursore su quell'elemento.
+    mutating func undoLast(at date: Date = Date()) -> SwipeDecision? {
+        guard let last = decisions.popLast() else { return nil }
+        let upperBound = min(cursor, queue.count)
+        if let index = queue[..<upperBound].lastIndex(of: last.itemID) {
+            cursor = index
+        } else {
+            cursor = max(0, cursor - 1)
+        }
+        isCompleted = false
+        updatedAt = date
+        return last
+    }
+
+    /// Rimette in coda gli elementi rimandati, per rivederli alla fine.
+    mutating func requeuePostponed(at date: Date = Date()) {
+        let postponed = postponedIDs
+        guard !postponed.isEmpty else { return }
+        decisions.removeAll { $0.choice == .postpone }
+        queue.append(contentsOf: postponed)
+        isCompleted = false
+        updatedAt = date
+    }
+}

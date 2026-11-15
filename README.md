@@ -1,0 +1,196 @@
+# ClearSpace AI
+
+**Meno spazio occupato. Più controllo sui tuoi ricordi.**
+
+App iOS nativa (Swift, SwiftUI) per la pulizia e l'organizzazione di iPhone e iCloud: foto, video, documenti, download, registrazioni audio, iCloud Drive e assistenza guidata per le altre app. Tutte le analisi avvengono sul dispositivo e nulla viene eliminato senza revisione e conferma.
+
+---
+
+## Stato del progetto: da leggere prima di tutto
+
+Il codice è stato scritto su Windows, dove Xcode non esiste. **Non è mai stato compilato né eseguito.**
+
+Cosa è stato verificato qui:
+
+- struttura del file di progetto Xcode, validità di plist, schema e cataloghi di risorse;
+- controlli statici automatici su tutti i sorgenti: parentesi bilanciate, etichette degli argomenti di funzioni e inizializzatori, membri dei tipi, `switch` esaustivi, `import` necessari.
+
+Cosa **non** è stato verificato:
+
+- la compilazione vera e propria (tipi, API dei framework Apple, concorrenza);
+- il comportamento su un dispositivo reale;
+- i test unitari, che sono scritti ma non sono mai stati eseguiti.
+
+Al primo build è normale aspettarsi alcuni errori di compilazione da correggere. Le soglie numeriche delle analisi (sfocatura, somiglianza, silenzi) sono punti di partenza ragionevoli e vanno tarate su librerie reali.
+
+---
+
+## Requisiti
+
+- Mac con **Xcode 16 o successivo** (il progetto usa le cartelle sincronizzate di Xcode 16).
+- iOS 17 o successivo sul dispositivo o sul simulatore.
+- Un account Apple per firmare l'app; per TestFlight e App Store serve l'iscrizione all'Apple Developer Program.
+
+## Come compilare
+
+1. Apri `ClearSpace.xcodeproj`.
+2. Nel target **ClearSpace**, scheda *Signing & Capabilities*, scegli il tuo team e sostituisci l'identificativo `com.example.ClearSpace` con uno tuo.
+3. Seleziona un simulatore o un iPhone e premi Esegui.
+
+Se Xcode non riuscisse ad aprire il progetto, puoi rigenerarlo con [XcodeGen](https://github.com/yonaskolb/XcodeGen) a partire da `project.yml`:
+
+```bash
+brew install xcodegen
+```
+
+```bash
+xcodegen generate
+```
+
+### Senza un Mac: GitHub Actions
+
+Il repository contiene due workflow, che girano su runner macOS di GitHub.
+
+| Workflow | Quando parte | Cosa fa |
+| --- | --- | --- |
+| `iOS build` | a ogni push su `main`, sulle pull request, a mano | compila app e test per il simulatore ed esegue i test unitari |
+| `TestFlight` | solo a mano | crea l'archivio di distribuzione, lo firma e lo carica su App Store Connect |
+
+Nel riepilogo di ogni esecuzione compaiono solo errori e risultati; i log completi di `xcodebuild` sono allegati come artefatti. Nei repository privati i minuti macOS di GitHub sono limitati e contano dieci volte: se si esauriscono, rendere pubblico il repository li rende gratuiti.
+
+### TestFlight
+
+Il caricamento richiede dati che solo il titolare dell'account Apple può fornire.
+
+1. **Apple Developer Program.** Serve l'iscrizione a pagamento.
+2. **Identificativo e app.** In *Certificates, Identifiers & Profiles* registra un identificativo (ad esempio `it.tuonome.clearspace`), poi in App Store Connect crea l'app con quell'identificativo.
+3. **Chiave API.** In App Store Connect, *Utenti e accessi → Integrazioni → API di App Store Connect*, genera una chiave del team con ruolo **Admin**. Scarica il file `.p8` (si può fare una sola volta) e annota l'ID della chiave e l'ID dell'emittente.
+4. **Variabili e segreti del repository.** Dalla cartella del progetto:
+
+   ```powershell
+   gh variable set APPLE_TEAM_ID --body "IL_TUO_TEAM_ID"
+   gh variable set APP_BUNDLE_ID --body "it.tuonome.clearspace"
+   gh secret set ASC_KEY_ID
+   gh secret set ASC_ISSUER_ID
+   Get-Content .\AuthKey_XXXXXXXXXX.p8 -Raw | gh secret set ASC_PRIVATE_KEY
+   ```
+
+   `gh secret set` senza valore chiede di incollarlo: i segreti non vanno scritti in chiaro in file o messaggi.
+5. **Avvio.** Scheda *Actions → TestFlight → Run workflow*, oppure `gh workflow run TestFlight`.
+6. **Dopo il caricamento.** In App Store Connect, scheda TestFlight: rispondi alla domanda sulla conformità all'esportazione (l'app cifra i dati locali con algoritmi standard del sistema) e aggiungi i tester interni.
+
+La firma usa i certificati gestiti da Apple: non servono file `.p12` né profili da caricare. Il numero di build è il numero progressivo dell'esecuzione del workflow. Questo workflow non è ancora stato eseguito: senza i dati dell'account Apple non è possibile provarlo.
+
+---
+
+## Struttura
+
+```
+ClearSpace.xcodeproj/        progetto Xcode
+Config/Info.plist            permessi, attività in background, tipi di documento
+project.yml                  definizione XcodeGen di riserva
+ClearSpace/
+  App/                       punto d'ingresso
+  Application/               ambiente dell'app, scansione, sessioni, motore di sicurezza
+  Core/                      modelli e logica pura (solo Foundation, testabile)
+  Storage/                   indice locale cifrato, preferenze, storico
+  Services/                  Foto, file, audio, video, sistema, piani
+  UI/                        schermate SwiftUI
+  Resources/                 icona, colore principale, manifest della privacy
+ClearSpaceTests/             79 test unitari sulla logica
+```
+
+80 file Swift per l'app (circa 16.700 righe) e 5 file di test.
+
+## Architettura
+
+| Strato | Contenuto |
+| --- | --- |
+| Presentazione | SwiftUI: Home, Analizza, Esplora, Revisione, Risultati, modalità swipe |
+| Servizi applicativi | `SessionManager`, `ScanCoordinator`, `CleanupPlanner` |
+| Foto | `PhotoLibraryService`, `PhotoIndexer`, `PhotoAnalysisPipeline` (PhotoKit) |
+| File | `FolderAccessService`, `FileIndexer`, `FileAnalysisPipeline`, `FileOperationService` |
+| Motore di analisi | `ImageAnalyzer` (Vision, OCR), `TextSimilarity`, `QualityRanker`, `RecoverabilityScorer` |
+| Sicurezza | `SafetyEngine`, `SafetyRules`, `PlanBuilder`, `ProtectionEvaluator` |
+| Dati locali | `IndexStore`, `HistoryStore`, `PreferencesStore`, `SecureFileStore` |
+
+### Il flusso di eliminazione
+
+1. **Selezione.** Uno swipe a sinistra (o il pulsante equivalente) cambia soltanto lo stato dell'elemento in "in attesa di eliminazione". Nessun file viene toccato.
+2. **Revisione.** La scheda Revisione mostra tutto ciò che è stato selezionato; si può ripristinare un elemento, un gruppo o tutto.
+3. **Conferma.** `PlanBuilder` prepara l'elenco con gli effetti distinti su iPhone e iCloud. L'utente deve confermare, e dichiarare di aver compreso gli effetti su iCloud e di aver controllato i contenuti sensibili quando presenti.
+4. **Esecuzione.** Solo `SafetyEngine.execute` può eliminare, e solo con una conferma valida per quel piano. Ricontrolla ogni elemento, esegue, verifica l'esito e registra ciò che è realmente avvenuto: eliminato, non riuscito o in attesa.
+
+Gli elementi protetti (preferiti, foto nascoste, album, cartelle e periodi scelti, elementi protetti singolarmente) non possono entrare nella lista delle eliminazioni.
+
+### La scansione progressiva
+
+| Fase | Cosa fa |
+| --- | --- |
+| A, metadati | Date, tipi, dimensioni. Non scarica nulla. Incrementale: riusa i dati degli elementi non modificati. |
+| B, anteprime | Nitidezza, luminosità, hash percettivo, testo degli screenshot, foto simili, probabili duplicati. |
+| C, approfondita | Hash SHA-256 degli originali, solo per i candidati; versioni dei documenti; audio. |
+| D, raccomandazioni | Riepilogo, priorità di revisione, spazio potenziale. |
+| E, esecuzione | Solo dalla Revisione, dopo la conferma. |
+
+La scansione si può mettere in pausa, si sospende da sola con batteria scarica o dispositivo caldo e non scarica originali da iCloud senza consenso.
+
+---
+
+## Corrispondenza con la specifica
+
+| Sezione della specifica | Dove si trova |
+| --- | --- |
+| 1. Cosa permette iOS | `UI/Settings/PlanAndInfoViews.swift` (`CapabilitiesInfoView`) |
+| 2. Dashboard | `UI/Home/HomeView.swift` |
+| 3. Pulizia con gli swipe | `UI/Swipe/`, `Application/SessionManager.swift` |
+| 4. Categorie di foto, confronto intelligente | `Core/Logic/SmartCollection.swift`, `UI/Explore/GroupViews.swift`, `Core/Logic/QualityRanker.swift` |
+| 5. Video e compressione | `Services/Video/VideoCompressionService.swift`, `UI/Videos/VideoCompressionView.swift` |
+| 6. Documenti, duplicati, tre operazioni | `Services/Files/`, `UI/Documents/` |
+| 7. Centro iCloud | `UI/ICloud/ICloudCenterView.swift` |
+| 8. Audio e registrazioni | `Services/Audio/`, `UI/Audio/AudioHubView.swift` |
+| 9. Assistente app | `Core/Content/AppGuides.swift`, `UI/Apps/AppAssistantView.swift` |
+| 10. ClearSpace Brain | `Services/Photos/`, `Core/Logic/` (ricerca, punteggio, raccomandazioni) |
+| 11. Tre modalità di pulizia | `UI/Modes/CleanupModesViews.swift`, `Core/Logic/CleanupPlanner.swift` |
+| 12. Funzioni aggiuntive | sessioni salvate, protezioni, viaggio, nostalgia, obiettivo, promemoria, pulizia annuale |
+| 13. Sicurezza e privacy | `Application/SafetyEngine.swift`, `Core/Models/CleanupReport.swift`, `Storage/SecureFileStore.swift` |
+| 14. Architettura | questa struttura; `Core/Models/IndexedItem.swift` |
+| 16. Criteri di qualità | `ClearSpaceTests/` |
+| 17. Modello commerciale | `Services/Store/PlanManager.swift` |
+
+---
+
+## Scelte tecniche da conoscere
+
+- **Dimensione delle foto.** PhotoKit non offre un'API pubblica per la dimensione su disco di un asset né per sapere se l'originale è sul dispositivo. `PhotoResourceInspector` legge questi valori dalle risorse con KVC (`fileSize`, `locallyAvailable`) in modo difensivo; se non sono disponibili ripiega su una stima, che nell'interfaccia è indicata come tale. È una pratica diffusa ma non documentata: va valutata prima della pubblicazione.
+- **Stato di Foto di iCloud.** iOS non lo comunica alle app. Lo indica l'utente; viene dedotto da solo quando si trova un originale presente solo online. Finché è sconosciuto, lo spazio su iCloud è riportato come "fino a…".
+- **Totale del piano iCloud.** Non è leggibile da un'app. La dashboard mostra ciò che l'app ha rilevato, oppure i valori inseriti a mano, con la dicitura "inserito da te".
+- **Liberare spazio senza eliminare.** Per le foto esiste solo "Ottimizza spazio iPhone" di iOS, a cui l'app rimanda. Per i file di iCloud Drive l'app può rimuovere la sola copia locale.
+- **Duplicati.** "Esatto" significa hash SHA-256 identico sull'originale. Il confronto delle sole anteprime produce "probabili duplicati" e non viene mai presentato come certezza.
+- **Dati locali.** L'indice contiene solo riferimenti e metadati, è cifrato con AES-GCM (chiave nel Portachiavi) ed è escluso dai backup. Le decisioni sono salvate a parte, a ogni scelta, e associate all'identificativo stabile dell'elemento: sopravvivono anche alla ricostruzione dell'indice.
+- **Altre app.** iOS isola i dati di ogni app: per WhatsApp, Telegram, Safari e le altre ClearSpace offre procedure guidate e una checklist, non accessi diretti.
+- **Memo Vocali.** L'archivio non è accessibile. L'app è registrata per aprire file audio: da Memo Vocali si usa Condividi e si sceglie ClearSpace. Viene importata una copia.
+- **Piani.** `AppConfiguration.monetizationEnabled` è `false`: tutte le funzioni sono sbloccate e StoreKit non viene interrogato. Va attivato dopo aver creato i prodotti in App Store Connect. Le funzioni di sicurezza non dipendono mai dal piano.
+- **Ricerca in linguaggio naturale.** È basata su regole, in italiano e in inglese, eseguite sul dispositivo. La ricerca testuale copre nomi dei file, testo riconosciuto e trascrizioni.
+
+## Non incluso
+
+- Sincronizzazione delle preferenze con CloudKit (la specifica la indica come eventuale).
+- Applicazione complementare per Mac.
+- Estensione di condivisione dedicata: l'importazione avviene con "Apri in ClearSpace" e con il selettore di file.
+- Raggruppamento delle foto per dispositivo di scatto (richiede la lettura dei metadati EXIF degli originali).
+- Prodotti StoreKit configurati e localizzazione in altre lingue: l'interfaccia è in italiano.
+
+## Test
+
+`ClearSpaceTests` contiene 79 test sulla logica pura: regole di sicurezza e conferma, piano di eliminazione, sessioni e annullamento, ricerca in linguaggio naturale, confronto dei testi, misure sulle immagini, punteggio di recuperabilità, pianificazione delle code, riepilogo e rilevamento dei viaggi.
+
+Si eseguono da Xcode con Prodotto → Test, oppure con il workflow di GitHub.
+
+## Prima della pubblicazione
+
+- Compilare, correggere gli errori ed eseguire i test.
+- Provare con librerie di decine di migliaia di elementi, con Foto di iCloud in modalità ottimizzata, con file solo online e con raccolte condivise.
+- Tarare le soglie in `Core/Support/AppConfiguration.swift`.
+- Verificare il manifest della privacy (`Resources/PrivacyInfo.xcprivacy`) e compilare la scheda privacy su App Store Connect.
+- Sostituire l'icona provvisoria.

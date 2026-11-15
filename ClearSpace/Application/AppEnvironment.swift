@@ -1,0 +1,256 @@
+import Foundation
+import Observation
+import UIKit
+
+/// Schede principali dell'app.
+enum AppTab: Hashable, Sendable {
+    case home
+    case analyze
+    case explore
+    case review
+    case results
+}
+
+/// Navigazione tra le schede, comandabile da qualsiasi schermata.
+@MainActor
+@Observable
+final class AppRouter {
+    var selectedTab: AppTab = .home
+}
+
+/// Contenitore dei servizi dell'app: li crea una sola volta e li collega tra loro.
+///
+/// Strati, dall'alto verso il basso:
+/// - presentazione (SwiftUI) → legge questo ambiente;
+/// - servizi applicativi → `SessionManager`, `ScanCoordinator`, `CleanupPlanner`;
+/// - servizi di piattaforma → Foto, file, analisi, sicurezza;
+/// - dati locali → indice, decisioni, preferenze, risultati.
+@MainActor
+@Observable
+final class AppEnvironment {
+
+    let router: AppRouter
+    let preferences: PreferencesStore
+    let store: IndexStore
+    let history: HistoryStore
+    let conditions: SystemConditionsMonitor
+    let photos: PhotoLibraryService
+    let folders: FolderAccessService
+    let thumbnails: ThumbnailProvider
+    let fileOperations: FileOperationService
+    let compression: VideoCompressionService
+    let safety: SafetyEngine
+    let sessions: SessionManager
+    let scan: ScanCoordinator
+    let plan: PlanManager
+    let reminders: ReminderScheduler
+    let background: BackgroundAnalysisScheduler
+
+    /// Diventa `true` quando indice, sessioni e preferenze sono stati caricati dal disco.
+    private(set) var isReady = false
+    /// Messaggio da mostrare dopo un'importazione ("Apri in ClearSpace").
+    var importMessage: String?
+
+    init() {
+        let files = SecureFileStore()
+        let router = AppRouter()
+        let preferences = PreferencesStore()
+        let store = IndexStore(files: files)
+        let history = HistoryStore(files: files)
+        let conditions = SystemConditionsMonitor()
+        let photos = PhotoLibraryService()
+        let folders = FolderAccessService(files: files)
+        let thumbnails = ThumbnailProvider(folders: folders)
+        let fileOperations = FileOperationService()
+        let plan = PlanManager()
+        let safety = SafetyEngine(
+            store: store,
+            preferences: preferences,
+            photos: photos,
+            folders: folders,
+            fileOperations: fileOperations,
+            history: history,
+            thumbnails: thumbnails
+        )
+        let sessions = SessionManager(
+            store: store,
+            safety: safety,
+            history: history,
+            preferences: preferences,
+            files: files
+        )
+        let scan = ScanCoordinator(
+            store: store,
+            preferences: preferences,
+            photos: photos,
+            folders: folders,
+            conditions: conditions,
+            safety: safety,
+            plan: plan
+        )
+        let background = BackgroundAnalysisScheduler()
+
+        self.router = router
+        self.preferences = preferences
+        self.store = store
+        self.history = history
+        self.conditions = conditions
+        self.photos = photos
+        self.folders = folders
+        self.thumbnails = thumbnails
+        self.fileOperations = fileOperations
+        self.compression = VideoCompressionService()
+        self.safety = safety
+        self.sessions = sessions
+        self.scan = scan
+        self.plan = plan
+        self.reminders = ReminderScheduler()
+        self.background = background
+
+        store.evaluatorProvider = { [weak safety] in
+            safety?.evaluator() ?? ProtectionEvaluator()
+        }
+        store.contextProvider = { [weak preferences] in
+            CollectionContext(
+                now: Date(),
+                largeVideoBytes: preferences?.values.largeVideoBytes ?? 100 * AppConfiguration.Thresholds.megabyte
+            )
+        }
+        plan.developerTierProvider = { [weak preferences] in
+            preferences?.values.developerTier
+        }
+        background.onRun = { [weak scan] in
+            await scan?.runInBackground() ?? false
+        }
+        background.onExpiration = { [weak scan] in
+            scan?.pause()
+        }
+    }
+
+    /// Carica i dati salvati e avvia i monitor di sistema.
+    func bootstrap() async {
+        guard !isReady else { return }
+        conditions.start()
+        plan.start()
+        await folders.load()
+        await history.load()
+        await store.load()
+        await sessions.load()
+        await safety.refreshProtectedAlbums()
+        await store.refreshSummaryNow()
+        isReady = true
+    }
+
+    // MARK: - Pianificazione delle sessioni
+
+    /// Fotografia dell'indice e delle regole correnti, da usare per costruire una coda di revisione.
+    func plannerInput() -> PlannerInput {
+        let groups = store.groupsSnapshot()
+        let largeVideoBytes = preferences.values.largeVideoBytes
+        let now = Date()
+        return PlannerInput(
+            items: store.snapshot(),
+            groups: groups,
+            evaluator: safety.evaluator(),
+            scorer: RecoverabilityScorer(
+                now: now,
+                largeVideoBytes: largeVideoBytes,
+                learner: history.learner,
+                groups: groups
+            ),
+            context: CollectionContext(now: now, largeVideoBytes: largeVideoBytes)
+        )
+    }
+
+    /// Costruisce la coda fuori dal thread principale e avvia la sessione di swipe.
+    /// Restituisce `false` se non c'è nulla da rivedere.
+    @discardableResult
+    func startSession(
+        title: String,
+        mode: CleanupMode,
+        goalBytes: Int64? = nil,
+        queue: @escaping @Sendable (PlannerInput) -> [UUID]
+    ) async -> Bool {
+        let input = plannerInput()
+        let ids = await Task.detached(priority: .userInitiated) {
+            queue(input)
+        }.value
+        return sessions.start(title: title, mode: mode, queue: ids, goalBytes: goalBytes)
+    }
+
+    /// Avvia una sessione su un elenco di elementi già scelto (es. una selezione o un gruppo).
+    @discardableResult
+    func startSession(title: String, mode: CleanupMode, itemIDs: [UUID]) -> Bool {
+        let protection = safety.evaluator()
+        let reviewable = store.items(itemIDs).filter { protection.isReviewable($0) }.map { $0.id }
+        return sessions.start(title: title, mode: mode, queue: reviewable)
+    }
+
+    /// Versione dell'indice osservata dagli elenchi. Resta ferma mentre è aperta la modalità swipe,
+    /// così le schermate sottostanti non si ricaricano a ogni scelta; si aggiornano alla chiusura.
+    var listRevision: Int {
+        sessions.isPresentingSwipe ? -1 : store.revision
+    }
+
+    // MARK: - Rete
+
+    /// Indica se è consentito scaricare un originale da iCloud per mostrarlo all'utente.
+    var canDownloadForViewing: Bool {
+        conditions.canDownload(wifiOnly: preferences.values.wifiOnlyDownloads)
+    }
+
+    // MARK: - Regole e cartelle
+
+    /// Va chiamato dopo una modifica delle regole di protezione.
+    func protectionRulesDidChange() async {
+        await safety.refreshProtectedAlbums()
+        await store.refreshSummaryNow()
+    }
+
+    /// Revoca l'accesso a una cartella e toglie i suoi elementi dall'indice. I file non vengono toccati.
+    func removeFolder(_ id: UUID) {
+        store.removeMissing(inFolder: id, keeping: [])
+        folders.removeFolder(id)
+        preferences.update { $0.protection.protectedFolderIDs.remove(id) }
+    }
+
+    // MARK: - Ciclo di vita
+
+    func didBecomeActive() {
+        photos.refreshAuthorization()
+        guard isReady, !scan.isRunning else { return }
+        // Scansione leggera quando la libreria è cambiata o non è mai stata analizzata.
+        if photos.canRead && (scan.needsRescan || store.isEmpty) {
+            scan.start(deep: false)
+        }
+    }
+
+    func didEnterBackground() {
+        let application = UIApplication.shared
+        let identifier = application.beginBackgroundTask(withName: "ClearSpace.save")
+        if scan.isRunning || store.summary.analysisProgress < 1 {
+            background.schedule()
+        }
+        Task {
+            await store.flush()
+            await history.flush()
+            await sessions.flush()
+            application.endBackgroundTask(identifier)
+        }
+    }
+
+    /// Gestisce un file ricevuto con "Apri in ClearSpace" (ad esempio un memo vocale condiviso).
+    func handleIncomingFile(_ url: URL) {
+        do {
+            let destination = try folders.importFile(from: url)
+            importMessage = "«\(destination.lastPathComponent)» è stato importato. L'originale nell'app di origine non è stato modificato."
+            if !scan.isRunning {
+                scan.start(deep: true)
+            }
+        } catch let error as FolderAccessError {
+            importMessage = error.message
+        } catch {
+            importMessage = "Importazione non riuscita."
+        }
+    }
+}

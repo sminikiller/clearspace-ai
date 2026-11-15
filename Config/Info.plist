@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>ClearSpace analizza foto e video direttamente sul dispositivo per aiutarti a trovare duplicati, contenuti simili e file ingombranti. Nulla viene eliminato senza la tua conferma e nessun contenuto lascia l'iPhone.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>ClearSpace salva nella libreria le versioni compresse dei video che scegli di ottimizzare.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>ClearSpace trascrive sul dispositivo le registrazioni audio che scegli, per permetterti di cercarle in base al contenuto.</string>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>$(PRODUCT_BUNDLE_IDENTIFIER).analysis</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>processing</string>
+	</array>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Registrazione audio</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.audio</string>
+			</array>
+		</dict>
+	</array>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<false/>
+</dict>
+</plist>
