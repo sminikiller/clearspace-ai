@@ -37,11 +37,16 @@ final class SmokeTests: XCTestCase {
         return app.descendants(matching: .any).matching(predicate).firstMatch
     }
 
-    /// Scorre verso il basso finché l'elemento non è toccabile.
+    /// Scorre la schermata, prima in giù e poi in su, finché l'elemento non è toccabile.
     private func bringIntoView(_ element: XCUIElement) {
         var attempts = 0
-        while !(element.exists && element.isHittable) && attempts < 8 {
+        while !(element.exists && element.isHittable) && attempts < 5 {
             app.swipeUp()
+            attempts += 1
+        }
+        attempts = 0
+        while !(element.exists && element.isHittable) && attempts < 10 {
+            app.swipeDown()
             attempts += 1
         }
     }
@@ -65,8 +70,9 @@ final class SmokeTests: XCTestCase {
 
     /// Completa l'introduzione del primo avvio e concede l'accesso a Foto.
     private func completeOnboardingIfNeeded() {
-        let next = app.buttons["Continua"]
-        guard next.waitForExistence(timeout: 20) else { return }
+        // Gli identificatori distinguono i pulsanti dell'introduzione da quelli, omonimi, della Home sottostante.
+        let next = app.buttons["onboarding.continue"]
+        guard next.waitForExistence(timeout: 12) else { return }
         capture("00-introduzione-1")
         next.tap()
         pause(1)
@@ -74,19 +80,19 @@ final class SmokeTests: XCTestCase {
         next.tap()
         pause(1)
 
-        let allow = app.buttons["Consenti l'accesso a Foto"]
-        let start = app.buttons["Inizia l'analisi"]
-        if allow.waitForExistence(timeout: 5) {
-            capture("00-introduzione-3")
-            allow.tap()
+        let primary = app.buttons["onboarding.primary"]
+        XCTAssertTrue(primary.waitForExistence(timeout: 5), "Manca l'ultima pagina dell'introduzione")
+        capture("00-introduzione-3")
+        let needsPermission = primary.label.contains("Consenti")
+        primary.tap()
+        if needsPermission {
             let granted = tapSystemButton(
                 ["Allow Full Access", "Allow Access to All Photos", "Consenti accesso completo"],
                 timeout: 20
             )
             XCTAssertTrue(granted, "L'avviso di sistema per l'accesso a Foto non è comparso")
-        } else if start.exists {
-            start.tap()
         }
+        pause(1)
     }
 
     private func goBack() {

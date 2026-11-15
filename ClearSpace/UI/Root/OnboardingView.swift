@@ -75,6 +75,7 @@ struct OnboardingView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
+                .accessibilityIdentifier("onboarding.continue")
             } else {
                 Button {
                     requestAccess()
@@ -90,6 +91,7 @@ struct OnboardingView: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 .disabled(isRequesting)
+                .accessibilityIdentifier("onboarding.primary")
 
                 Button("Non ora") {
                     finish(startScan: false)
