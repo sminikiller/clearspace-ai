@@ -13,10 +13,10 @@ Il codice è stato scritto su Windows, dove Xcode non esiste. Compilazione, test
 Verificato a ogni modifica del codice (ultimo esito: tutto superato):
 
 - compilazione di app e test senza errori;
-- 99 test unitari sulla logica: regole di sicurezza, piano di eliminazione, sessioni e scelte di gruppo, ricerca, analisi, scelta dello scatto migliore, pianificazione, formati;
+- 101 test unitari sulla logica: regole di sicurezza, piano di eliminazione, sessioni e scelte di gruppo, ricerca, analisi, scelta dello scatto migliore, pianificazione, formati;
 - prova d'uso automatica sul simulatore, con una schermata salvata a ogni passo:
   - introduzione, permesso per Foto, analisi completa fino al termine, swipe e pulsanti, annullamento, dettagli, revisione, conferma, eliminazione reale di due foto di prova ed esito;
-  - foto simili: il workflow aggiunge al simulatore tre scatti della stessa scena (nitido, sfocato, scuro) e l'app deve riconoscerli come gruppo, consigliare quello nitido, mostrare il confronto con lo zoom condiviso e applicare «Tieni solo la migliore»;
+  - foto simili: il workflow aggiunge al simulatore tre scatti della stessa scena (nitido, sfocato, scuro) e l'app deve riconoscerli come gruppo, consigliare quello nitido, mostrare il confronto con lo zoom condiviso e applicare «Tieni solo la migliore»; nello swipe deve comparire la striscia con tutti gli scatti, «Tieni la migliore» deve chiudere il gruppo e un solo annullamento deve ripristinarlo;
   - video: un video di prova deve riprodursi dentro la carta e mettersi in pausa con un tocco;
   - un giro di tutte le altre schermate.
 
