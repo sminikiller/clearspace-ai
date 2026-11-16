@@ -160,6 +160,11 @@ final class SmokeTests: XCTestCase {
         app.tabBars.buttons["Analizza"].tap()
         XCTAssertTrue(analysisCompleted.waitForExistence(timeout: 300), "L'analisi non è terminata")
 
+        // Pulizia guidata → foto simili: nello swipe devono comparire tutti gli scatti del gruppo
+        app.tabBars.buttons["Home"].tap()
+        pause(1)
+        reviewSimilarShotsInSwipe()
+
         // Esplora → Foto → Foto simili → primo gruppo
         app.tabBars.buttons["Esplora"].tap()
         pause(1)
@@ -270,6 +275,75 @@ final class SmokeTests: XCTestCase {
             "La sessione non si è conclusa dopo l'ultimo elemento"
         )
         capture("48-sessione-completata")
+        app.buttons["Chiudi"].firstMatch.tap()
+        pause(1)
+    }
+
+    /// Dalla pulizia guidata avvia lo swipe sulle foto simili: controlla la striscia con tutti gli
+    /// scatti del gruppo, la scelta "tieni la migliore" e il suo annullamento con un solo gesto.
+    /// Al termine le foto tornano com'erano.
+    private func reviewSimilarShotsInSwipe() {
+        let guided = element(startingWith: "Pulizia guidata")
+        bringIntoView(guided)
+        guard guided.exists else {
+            XCTFail("Voce non trovata nella Home: Pulizia guidata")
+            return
+        }
+        guided.tap()
+        guard app.navigationBars["Pulizia guidata"].waitForExistence(timeout: 10) else {
+            XCTFail("La pulizia guidata non si è aperta")
+            return
+        }
+        defer { goBack() }
+
+        // Solo il passo delle foto simili ha elementi: è l'unico pulsante attivo.
+        let enabledSwipe = app.buttons
+            .matching(NSPredicate(format: "label == %@ AND enabled == true", "Rivedi con gli swipe"))
+            .firstMatch
+        guard enabledSwipe.waitForExistence(timeout: 20) else {
+            capture("35-guidata-senza-simili")
+            XCTFail("La pulizia guidata non propone le foto simili")
+            return
+        }
+        bringIntoView(enabledSwipe)
+        capture("35-guidata-con-simili")
+        enabledSwipe.tap()
+
+        let keepBest = app.buttons["Tieni la migliore"]
+        guard keepBest.waitForExistence(timeout: 20) else {
+            capture("36-swipe-senza-striscia")
+            XCTFail("Nello swipe manca la striscia degli scatti simili")
+            if app.buttons["Chiudi"].firstMatch.exists {
+                app.buttons["Chiudi"].firstMatch.tap()
+            }
+            return
+        }
+        pause(2)
+        capture("36-swipe-con-simili")
+
+        // Un tocco decide l'intero gruppo: resta la migliore, le altre vanno in revisione
+        keepBest.tap()
+        XCTAssertTrue(
+            element(containing: "Sessione completata").waitForExistence(timeout: 10),
+            "La scelta sul gruppo non ha concluso la sessione"
+        )
+        pause(1)
+        capture("37-gruppo-deciso")
+
+        // Un solo gesto annulla l'intera scelta
+        let undo = app.buttons["Annulla l'ultima scelta"]
+        if undo.waitForExistence(timeout: 5) {
+            bringIntoView(undo)
+            undo.tap()
+            XCTAssertTrue(
+                app.buttons["Conserva"].waitForExistence(timeout: 10),
+                "L'annullamento non ha riportato le foto nella sessione"
+            )
+            pause(1)
+            capture("38-gruppo-annullato")
+        } else {
+            XCTFail("Manca il pulsante per annullare la scelta sul gruppo")
+        }
         app.buttons["Chiudi"].firstMatch.tap()
         pause(1)
     }

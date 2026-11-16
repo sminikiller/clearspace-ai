@@ -400,11 +400,16 @@ struct InlineVideoView: View {
     private var frameStrip: some View {
         HStack(spacing: 3) {
             ForEach(Array(controller.frames.enumerated()), id: \.offset) { index, frame in
-                Image(uiImage: frame)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
+                // La larghezza la decide il riquadro, non il fotogramma: un'immagine che "riempie"
+                // chiederebbe più spazio di quello disponibile e spingerebbe la barra fuori dalla carta.
+                Color.clear
                     .frame(maxWidth: .infinity)
                     .frame(height: 40)
+                    .overlay {
+                        Image(uiImage: frame)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    }
                     .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
                     .contentShape(Rectangle())
                     .onTapGesture {

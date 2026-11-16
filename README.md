@@ -13,14 +13,19 @@ Il codice è stato scritto su Windows, dove Xcode non esiste. Compilazione, test
 Verificato a ogni modifica del codice (ultimo esito: tutto superato):
 
 - compilazione di app e test senza errori;
-- 85 test unitari sulla logica: regole di sicurezza, piano di eliminazione, sessioni, ricerca, analisi, pianificazione, formati;
-- prova d'uso automatica sul simulatore: introduzione, permesso per Foto, analisi completa fino al termine, swipe e pulsanti, annullamento, dettagli, revisione, conferma, eliminazione reale di due foto di prova ed esito; poi un giro di tutte le altre schermate, con una schermata salvata a ogni passo.
+- 99 test unitari sulla logica: regole di sicurezza, piano di eliminazione, sessioni e scelte di gruppo, ricerca, analisi, scelta dello scatto migliore, pianificazione, formati;
+- prova d'uso automatica sul simulatore, con una schermata salvata a ogni passo:
+  - introduzione, permesso per Foto, analisi completa fino al termine, swipe e pulsanti, annullamento, dettagli, revisione, conferma, eliminazione reale di due foto di prova ed esito;
+  - foto simili: il workflow aggiunge al simulatore tre scatti della stessa scena (nitido, sfocato, scuro) e l'app deve riconoscerli come gruppo, consigliare quello nitido, mostrare il confronto con lo zoom condiviso e applicare «Tieni solo la migliore»;
+  - video: un video di prova deve riprodursi dentro la carta e mettersi in pausa con un tocco;
+  - un giro di tutte le altre schermate.
 
 Cosa **non** è stato verificato:
 
-- il comportamento su un iPhone reale e con una libreria grande: prestazioni, memoria, durata dell'analisi, originali presenti solo su iCloud;
-- le funzioni su file e cartelle (documenti, iCloud Drive, audio, compressione dei video): il simulatore della prova contiene soltanto sei foto, quindi di queste schermate è verificato l'aspetto, non l'uso con contenuti veri;
-- duplicati e foto simili su casi reali: le sei foto di prova sono tutte diverse.
+- il comportamento su un iPhone reale e con una libreria grande: prestazioni, memoria, durata dell'analisi;
+- il download delle anteprime nitide e dei video da iCloud: il simulatore non ha una libreria su iCloud, quindi quel percorso è scritto ma non provato;
+- la valutazione dei volti (qualità, occhi chiusi, sorrisi): le foto di prova non contengono persone;
+- le funzioni su file e cartelle (documenti, iCloud Drive, audio, compressione dei video): di queste schermate è verificato l'aspetto, non l'uso con contenuti veri.
 
 Le soglie numeriche delle analisi (sfocatura, somiglianza, silenzi) sono punti di partenza ragionevoli e vanno tarate su librerie reali.
 
@@ -127,7 +132,7 @@ ClearSpaceUITests/           prova d'uso automatica sul simulatore
 | Servizi applicativi | `SessionManager`, `ScanCoordinator`, `CleanupPlanner` |
 | Foto | `PhotoLibraryService`, `PhotoIndexer`, `PhotoAnalysisPipeline` (PhotoKit) |
 | File | `FolderAccessService`, `FileIndexer`, `FileAnalysisPipeline`, `FileOperationService` |
-| Motore di analisi | `ImageAnalyzer` (Vision, OCR), `TextSimilarity`, `QualityRanker`, `RecoverabilityScorer` |
+| Motore di analisi | `ImageAnalyzer` (Vision, OCR), `ShotAnalyzer` (volti, occhi, nitidezza del soggetto), `TextSimilarity`, `QualityRanker`, `RecoverabilityScorer` |
 | Sicurezza | `SafetyEngine`, `SafetyRules`, `PlanBuilder`, `ProtectionEvaluator` |
 | Dati locali | `IndexStore`, `HistoryStore`, `PreferencesStore`, `SecureFileStore` |
 
@@ -140,12 +145,28 @@ ClearSpaceUITests/           prova d'uso automatica sul simulatore
 
 Gli elementi protetti (preferiti, foto nascoste, album, cartelle e periodi scelti, elementi protetti singolarmente) non possono entrare nella lista delle eliminazioni.
 
+### Foto simili e scelta dello scatto migliore
+
+Quando una foto ha degli scatti simili, l'app li mostra tutti: nella modalità swipe compare una striscia con l'intero gruppo, e il confronto apre le foto una accanto all'altra.
+
+- **Raggruppamento.** Raffiche (riconosciute da iOS) e scatti ravvicinati nel tempo, confrontati con le impronte visive di Vision. Se Vision non riesce a produrre l'impronta si ripiega sull'hash percettivo delle anteprime.
+- **Criteri.** Per ogni membro di un gruppo `ShotAnalyzer` misura: nitidezza dell'intera immagine, nitidezza del soggetto (il volto più grande, altrimenti il centro), qualità dei volti secondo Vision, occhi chiusi e sorrisi, giudizio estetico dove iOS lo mette a disposizione. A questi si aggiungono esposizione e risoluzione.
+- **Confronto corretto.** Un criterio viene usato solo se è disponibile per tutti gli scatti del gruppo: non si paragonano numeri calcolati in modo diverso. Preferiti e foto modificate prevalgono sempre, perché sono scelte già fatte dall'utente.
+- **Spiegazione.** Il consiglio arriva con il motivo («ha gli occhi aperti e il soggetto più a fuoco») e ogni scatto ha un voto da 0 a 100. Nel confronto lo zoom è condiviso: ingrandito un punto, si passa da una foto all'altra restando lì.
+- **Scelta.** «Tieni solo la migliore», «Tieni solo questa» oppure «Tieni tutte». Gli scatti scartati passano alla Revisione come ogni altra scelta, e la mossa si annulla con un solo gesto.
+
+### Anteprime nitide e video
+
+- Con Foto di iCloud e «Ottimizza spazio iPhone» sul dispositivo resta spesso solo un'anteprima a bassa qualità. L'app mostra subito quella e poi la versione nitida, scaricandola da iCloud se la rete lo consente (rispettando «solo con Wi‑Fi»). Se il download non è consentito lo dice e offre di scaricarla comunque: non resta mai una foto sfocata senza spiegazione.
+- I video si riproducono dentro la carta, senza audio finché non lo si attiva: un tocco mette in pausa, la barra permette di spostarsi, i fotogrammi in basso mostrano i momenti principali, c'è la velocità doppia.
+- Le immagini delle carte successive vengono preparate in anticipo.
+
 ### La scansione progressiva
 
 | Fase | Cosa fa |
 | --- | --- |
 | A, metadati | Date, tipi, dimensioni. Non scarica nulla. Incrementale: riusa i dati degli elementi non modificati. |
-| B, anteprime | Nitidezza, luminosità, hash percettivo, testo degli screenshot, foto simili, probabili duplicati. |
+| B, anteprime | Nitidezza, luminosità, hash percettivo, testo degli screenshot, foto simili, probabili duplicati, scelta dello scatto migliore nei gruppi. |
 | C, approfondita | Hash SHA-256 degli originali, solo per i candidati; versioni dei documenti; audio. |
 | D, raccomandazioni | Riepilogo, priorità di revisione, spazio potenziale. |
 | E, esecuzione | Solo dalla Revisione, dopo la conferma. |
