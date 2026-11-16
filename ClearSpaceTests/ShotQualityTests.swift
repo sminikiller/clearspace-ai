@@ -167,6 +167,34 @@ final class ShotQualityTests: XCTestCase {
         XCTAssertEqual(decision.choice, .keep)
     }
 
+    // MARK: - Gruppi sovrapposti
+
+    func testCopiesInsideASimilarGroupAreShownWithTheWholeGroup() {
+        let sharp = UUID()
+        let dark = UUID()
+        let blurred = UUID()
+        // Nitida e scura risultano copie tra loro; tutte e tre sono scatti simili.
+        let duplicates = ItemGroup(kind: .visualDuplicate, scope: .photoLibrary, memberIDs: [sharp, dark])
+        let similar = ItemGroup(kind: .similar, scope: .photoLibrary, memberIDs: [sharp, blurred, dark])
+
+        // Si mostra l'insieme più ampio: così non si decide due volte sulle stesse foto.
+        XCTAssertEqual(ItemGroup.preferred(duplicate: duplicates, similar: similar)?.id, similar.id)
+        XCTAssertEqual(ItemGroup.preferred(duplicate: duplicates, similar: nil)?.id, duplicates.id)
+        XCTAssertEqual(ItemGroup.preferred(duplicate: nil, similar: similar)?.id, similar.id)
+        XCTAssertNil(ItemGroup.preferred(duplicate: nil, similar: nil))
+    }
+
+    func testCopiesOutsideTheSimilarGroupKeepTheirOwnGroup() {
+        let first = UUID()
+        let copyElsewhere = UUID()
+        let neighbour = UUID()
+        // La copia non è tra gli scatti simili: nasconderla dietro quel gruppo la farebbe perdere di vista.
+        let duplicates = ItemGroup(kind: .exactDuplicate, scope: .photoLibrary, memberIDs: [first, copyElsewhere])
+        let similar = ItemGroup(kind: .similar, scope: .photoLibrary, memberIDs: [first, neighbour])
+
+        XCTAssertEqual(ItemGroup.preferred(duplicate: duplicates, similar: similar)?.id, duplicates.id)
+    }
+
     // MARK: - Ordine della coda
 
     func testQueueKeepsGroupMembersTogetherWithTheSuggestedShotFirst() {

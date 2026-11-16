@@ -95,6 +95,14 @@ final class IndexStore {
         group.memberIDs.compactMap { itemsByID[$0] }
     }
 
+    /// Gruppo da mostrare per un elemento: vedi `ItemGroup.preferred(duplicate:similar:)`.
+    func presentationGroup(for item: IndexedItem) -> ItemGroup? {
+        ItemGroup.preferred(
+            duplicate: item.duplicateGroupID.flatMap { groupsByID[$0] },
+            similar: item.similarityGroupID.flatMap { groupsByID[$0] }
+        )
+    }
+
     func markedItems() -> [IndexedItem] {
         markedIDs
             .compactMap { itemsByID[$0] }

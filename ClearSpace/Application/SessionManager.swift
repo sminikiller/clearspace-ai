@@ -93,9 +93,7 @@ final class SessionManager {
         // Gli scatti simili vengono proposti uno dopo l'altro, a partire da quello consigliato.
         let ordered = CleanupPlanner.clusteredByGroup(available) { [store] id in
             guard let item = store.item(id) else { return nil }
-            if let groupID = item.duplicateGroupID, let group = store.group(groupID) { return group }
-            if let groupID = item.similarityGroupID, let group = store.group(groupID) { return group }
-            return nil
+            return store.presentationGroup(for: item)
         }
         let session = CleanupSession(title: title, mode: mode, queue: ordered, goalBytes: goalBytes)
         sessions.insert(session, at: 0)

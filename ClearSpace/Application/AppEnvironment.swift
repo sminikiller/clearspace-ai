@@ -229,12 +229,10 @@ final class AppEnvironment {
         }
     }
 
-    /// Gruppo di simili o duplicati a cui appartiene un elemento. I duplicati hanno la precedenza:
-    /// sono la relazione più stretta.
+    /// Gruppo di simili o duplicati da mostrare per un elemento. Se appartiene a entrambi viene scelto
+    /// quello che li comprende tutti, così non si decide due volte sulle stesse foto.
     func group(containing item: IndexedItem) -> ItemGroup? {
-        if let id = item.duplicateGroupID, let group = store.group(id) { return group }
-        if let id = item.similarityGroupID, let group = store.group(id) { return group }
-        return nil
+        store.presentationGroup(for: item)
     }
 
     // MARK: - Regole e cartelle

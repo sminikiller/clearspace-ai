@@ -99,4 +99,16 @@ struct ItemGroup: Identifiable, Codable, Hashable, Sendable {
         guard let suggestedKeepID else { return Array(memberIDs.dropFirst()) }
         return memberIDs.filter { $0 != suggestedKeepID }
     }
+
+    /// Gruppo da mostrare per un elemento che appartiene sia a un gruppo di duplicati sia a uno di simili.
+    ///
+    /// Due scatti quasi identici di una stessa serie risultano spesso "probabili duplicati" tra loro e,
+    /// insieme agli altri, "foto simili": mostrando i due gruppi separatamente si dovrebbe decidere due
+    /// volte sulle stesse foto. Quando le copie sono tutte comprese tra gli scatti simili si mostra
+    /// quindi l'insieme più ampio; altrimenti prevale il legame più stretto, quello tra copie.
+    static func preferred(duplicate: ItemGroup?, similar: ItemGroup?) -> ItemGroup? {
+        guard let duplicate else { return similar }
+        guard let similar else { return duplicate }
+        return Set(duplicate.memberIDs).isSubset(of: Set(similar.memberIDs)) ? similar : duplicate
+    }
 }
