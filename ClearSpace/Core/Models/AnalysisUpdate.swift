@@ -10,6 +10,7 @@ struct AnalysisUpdate: Sendable {
     var perceptualHash: UInt64?
     var sharpness: Double?
     var brightness: Double?
+    var shot: ShotMetrics?
     var textContent: String?
     var fingerprint: [Float]?
     var duration: Double?
@@ -27,6 +28,7 @@ struct AnalysisUpdate: Sendable {
         if let perceptualHash { item.perceptualHash = perceptualHash }
         if let sharpness { item.sharpness = sharpness }
         if let brightness { item.brightness = brightness }
+        if let shot { item.shot = shot }
         if let textContent { item.textContent = textContent }
         if let fingerprint { item.fingerprint = fingerprint }
         if let duration, duration > 0 { item.duration = duration }

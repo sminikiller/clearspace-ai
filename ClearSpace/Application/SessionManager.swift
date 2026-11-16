@@ -68,6 +68,21 @@ final class SessionManager {
         return store.item(id)
     }
 
+    /// Prossimi elementi ancora da decidere dopo quello corrente: quelli già decisi altrove
+    /// (ad esempio con una scelta su un intero gruppo) non verranno più proposti.
+    func upcomingItems(limit: Int) -> [IndexedItem] {
+        guard let session = active, limit > 0 else { return [] }
+        var result: [IndexedItem] = []
+        var offset = 1
+        while result.count < limit, offset < 200, let id = session.itemID(atOffset: offset) {
+            if let item = store.item(id), item.isPendingReview {
+                result.append(item)
+            }
+            offset += 1
+        }
+        return result
+    }
+
     // MARK: - Avvio e chiusura
 
     /// Avvia una nuova sessione. Restituisce `false` se non c'è nulla da rivedere.
@@ -75,7 +90,14 @@ final class SessionManager {
     func start(title: String, mode: CleanupMode, queue: [UUID], goalBytes: Int64? = nil) -> Bool {
         let available = queue.filter { store.item($0) != nil }
         guard !available.isEmpty else { return false }
-        let session = CleanupSession(title: title, mode: mode, queue: available, goalBytes: goalBytes)
+        // Gli scatti simili vengono proposti uno dopo l'altro, a partire da quello consigliato.
+        let ordered = CleanupPlanner.clusteredByGroup(available) { [store] id in
+            guard let item = store.item(id) else { return nil }
+            if let groupID = item.duplicateGroupID, let group = store.group(groupID) { return group }
+            if let groupID = item.similarityGroupID, let group = store.group(groupID) { return group }
+            return nil
+        }
+        let session = CleanupSession(title: title, mode: mode, queue: ordered, goalBytes: goalBytes)
         sessions.insert(session, at: 0)
         trimSessions()
         activeSessionID = session.id
@@ -87,7 +109,7 @@ final class SessionManager {
     func resume(_ id: UUID) {
         guard let index = sessions.firstIndex(where: { $0.id == id }) else { return }
         activeSessionID = id
-        skipMissingItems(at: index)
+        skipSettledItems(at: index)
         isPresentingSwipe = true
     }
 
@@ -123,18 +145,21 @@ final class SessionManager {
         sessions = Array(sessions.prefix(20))
     }
 
-    private func skipMissingItems(at index: Int) {
-        while let id = sessions[index].currentItemID, store.item(id) == nil {
+    /// Avanza oltre gli elementi su cui non c'è più nulla da decidere: quelli non più disponibili
+    /// e quelli già decisi altrove, ad esempio con una scelta su un intero gruppo di foto simili.
+    private func skipSettledItems(at index: Int) {
+        while let id = sessions[index].currentItemID {
+            if let item = store.item(id), item.isPendingReview { break }
             sessions[index].skipCurrent()
         }
     }
 
     /// Salta gli elementi della sessione attiva che nel frattempo non sono più disponibili
-    /// (ad esempio rimossi dalla libreria mentre la sessione era aperta).
+    /// (ad esempio rimossi dalla libreria mentre la sessione era aperta) o già decisi.
     func skipUnavailableItems() {
         guard let index = activeIndex else { return }
         let previousCursor = sessions[index].cursor
-        skipMissingItems(at: index)
+        skipSettledItems(at: index)
         if sessions[index].cursor != previousCursor {
             scheduleSave()
         }
@@ -159,21 +184,72 @@ final class SessionManager {
         store.setReviewStatus(status, for: [itemID])
         sessions[index].record(choice, previousStatus: item.reviewStatus, bytes: item.bytes)
         history.recordDecision(choice, bucket: bucket(for: item))
-        skipMissingItems(at: index)
+        skipSettledItems(at: index)
         scheduleSave()
         return evaluation.result
     }
 
-    /// Annulla l'ultima scelta, ripristinando lo stato precedente dell'elemento.
+    /// Applica in blocco una scelta su più elementi, tipicamente un gruppo di foto simili:
+    /// conserva `keepIDs` e propone `deleteIDs` per l'eliminazione. Gli elementi protetti vengono saltati.
+    /// Come ogni altra scelta, cambia soltanto lo stato di revisione: nulla viene eliminato.
+    /// Se c'è una sessione attiva la mossa vi viene registrata e si annulla con un solo gesto.
     @discardableResult
-    func undo() -> Bool {
-        guard let index = activeIndex, let decision = sessions[index].undoLast() else { return false }
-        if let item = store.item(decision.itemID) {
+    func decideGroup(keep keepIDs: [UUID], delete deleteIDs: [UUID]) -> (applied: Int, blocked: Int) {
+        let evaluator = safety.evaluator()
+        var choices: [BatchChoice] = []
+        var kept: [UUID] = []
+        var marked: [UUID] = []
+        var blocked = 0
+
+        for id in keepIDs {
+            guard let item = store.item(id) else { continue }
+            kept.append(id)
+            choices.append(BatchChoice(itemID: id, choice: .keep, previousStatus: item.reviewStatus, bytes: item.bytes))
+        }
+        for id in deleteIDs where !keepIDs.contains(id) {
+            guard let item = store.item(id) else { continue }
+            let evaluation = SafetyRules.evaluate(.delete, on: item, evaluator: evaluator)
+            guard evaluation.status != nil else {
+                blocked += 1
+                continue
+            }
+            marked.append(id)
+            choices.append(BatchChoice(itemID: id, choice: .delete, previousStatus: item.reviewStatus, bytes: item.bytes))
+        }
+        guard !choices.isEmpty else { return (0, blocked) }
+
+        for entry in choices {
+            if let item = store.item(entry.itemID) {
+                history.recordDecision(entry.choice, bucket: bucket(for: item))
+            }
+        }
+        store.setReviewStatus(.kept, for: kept)
+        store.setReviewStatus(.markedForDeletion, for: marked)
+
+        // La mossa entra nel registro della sessione solo se la modalità swipe è aperta:
+        // una scelta fatta da un elenco non deve finire in una sessione messa da parte.
+        if isPresentingSwipe, let index = activeIndex {
+            sessions[index].recordBatch(choices)
+            skipSettledItems(at: index)
+            scheduleSave()
+        }
+        return (marked.count, blocked)
+    }
+
+    /// Annulla l'ultima mossa (una scelta singola o una scelta di gruppo), ripristinando lo stato
+    /// precedente degli elementi. Restituisce quante decisioni sono state annullate.
+    @discardableResult
+    func undo() -> Int {
+        guard let index = activeIndex else { return 0 }
+        let undone = sessions[index].undoLastMove()
+        guard !undone.isEmpty else { return 0 }
+        for decision in undone {
+            guard let item = store.item(decision.itemID) else { continue }
             store.setReviewStatus(decision.previousStatus, for: [decision.itemID])
             history.revertDecision(decision.choice, bucket: bucket(for: item))
         }
         scheduleSave()
-        return true
+        return undone.count
     }
 
     var canUndo: Bool {
@@ -184,7 +260,7 @@ final class SessionManager {
     func reviewPostponed() {
         guard let index = activeIndex else { return }
         sessions[index].requeuePostponed()
-        skipMissingItems(at: index)
+        skipSettledItems(at: index)
         scheduleSave()
     }
 

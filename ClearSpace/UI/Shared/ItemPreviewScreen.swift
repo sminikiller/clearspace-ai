@@ -110,24 +110,29 @@ struct ItemPreviewScreen: View {
     }
 }
 
-/// Foto a piena risoluzione, ingrandibile.
+/// Foto a piena risoluzione, ingrandibile. Se sul dispositivo c'è solo l'anteprima a bassa qualità
+/// lo dice e permette di scaricare quella nitida: è qui che si controlla se uno scatto è riuscito.
 struct ZoomablePhotoView: View {
     let item: IndexedItem
 
     @Environment(AppEnvironment.self) private var env
-    @State private var image: UIImage?
-    @State private var didFinish = false
+    @State private var loader = DisplayImageLoader()
+
+    private struct LoadKey: Equatable {
+        let id: UUID
+        let attempt: Int
+    }
 
     var body: some View {
         ZStack {
             Color.black
-            if let image {
+            if let image = loader.image {
                 ZoomableImageView(image: image)
-            } else if didFinish {
+            } else if loader.phase == .failed || loader.phase == .needsNetwork {
                 ContentUnavailableView(
                     "Immagine non disponibile",
                     systemImage: "icloud.slash",
-                    description: Text("L'originale è solo su iCloud e il download non è consentito con la rete attuale.")
+                    description: Text("L'originale è solo su iCloud e non è stato scaricato.")
                 )
                 .foregroundStyle(.white)
             } else {
@@ -135,19 +140,13 @@ struct ZoomablePhotoView: View {
                     .tint(.white)
             }
         }
-        .task(id: item.id) {
-            image = nil
-            didFinish = false
-            let stream = env.thumbnails.images(
-                for: item,
-                pixelSide: 3_000,
-                fill: false,
-                allowNetwork: env.canDownloadForViewing
-            )
-            for await next in stream {
-                image = next
-            }
-            didFinish = true
+        .overlay(alignment: .bottom) {
+            ImageLoadStatusView(loader: loader)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 16)
+        }
+        .task(id: LoadKey(id: item.id, attempt: loader.attempt)) {
+            await loader.load(item: item, pixelSide: 3_000, env: env)
         }
     }
 }
@@ -160,6 +159,13 @@ struct VideoPlaybackView: View {
     @State private var player: AVPlayer?
     @State private var isUnavailable = false
     @State private var isFast = false
+    /// L'utente ha chiesto di riprodurre comunque, anche con la rete a consumo.
+    @State private var forcesNetwork = false
+
+    private struct LoadKey: Equatable {
+        let id: UUID
+        let forcesNetwork: Bool
+    }
 
     var body: some View {
         ZStack {
@@ -167,11 +173,20 @@ struct VideoPlaybackView: View {
             if let player {
                 VideoPlayer(player: player)
             } else if isUnavailable {
-                ContentUnavailableView(
-                    "Video non disponibile",
-                    systemImage: "icloud.slash",
-                    description: Text("Il video è solo su iCloud e il download non è consentito con la rete attuale.")
-                )
+                ContentUnavailableView {
+                    Label("Video non disponibile", systemImage: "icloud.slash")
+                } description: {
+                    Text(env.conditions.isOnline
+                         ? "Il video è solo su iCloud e non è stato scaricato."
+                         : "Il video è solo su iCloud: serve una connessione.")
+                } actions: {
+                    if env.conditions.isOnline {
+                        Button("Riproduci comunque") {
+                            forcesNetwork = true
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
                 .foregroundStyle(.white)
             } else {
                 ProgressView("Caricamento…")
@@ -191,10 +206,11 @@ struct VideoPlaybackView: View {
                 .accessibilityHint("Cambia la velocità di riproduzione")
             }
         }
-        .task(id: item.id) {
+        .task(id: LoadKey(id: item.id, forcesNetwork: forcesNetwork)) {
             player = nil
             isUnavailable = false
-            if let playerItem = await env.thumbnails.playerItem(for: item, allowNetwork: env.canDownloadForViewing) {
+            let allowNetwork = env.canDownloadForViewing || (forcesNetwork && env.conditions.isOnline)
+            if let playerItem = await env.thumbnails.playerItem(for: item, allowNetwork: allowNetwork) {
                 player = AVPlayer(playerItem: playerItem)
             } else {
                 isUnavailable = true

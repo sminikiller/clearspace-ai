@@ -4,6 +4,18 @@ import Photos
 import QuickLookThumbnailing
 import UIKit
 
+/// Stato del caricamento di un'immagine mostrata in grande.
+enum ImageLoadEvent {
+    /// Immagine disponibile. `isFinal` è `false` per la versione provvisoria a bassa qualità,
+    /// quella che iOS tiene sul dispositivo quando l'originale è su iCloud.
+    case image(UIImage, isFinal: Bool)
+    /// Avanzamento del download da iCloud (0…1).
+    case downloading(Double)
+    /// La versione nitida è solo su iCloud e la rete non è consentita.
+    case needsNetwork
+    case failed
+}
+
 /// Fornisce le immagini mostrate nell'interfaccia: anteprime della libreria Foto tramite PhotoKit
 /// e anteprime dei file tramite Quick Look. Non conserva copie su disco.
 @MainActor
@@ -87,6 +99,115 @@ final class ThumbnailProvider {
             }
         }
     }
+
+    // MARK: - Immagini mostrate in grande
+
+    /// Flusso per le immagini mostrate in grande (carta dello swipe, confronto): oltre alle immagini
+    /// segnala l'avanzamento del download e quando, per la versione nitida, servirebbe la rete.
+    /// Così l'interfaccia non resta con un'anteprima sfocata senza spiegare perché.
+    func displayEvents(for item: IndexedItem, pixelSide: CGFloat, allowNetwork: Bool) -> AsyncStream<ImageLoadEvent> {
+        if item.source == .photoLibrary {
+            guard let libraryAsset = self.asset(for: item.sourceIdentifier) else {
+                return AsyncStream { continuation in
+                    continuation.yield(.failed)
+                    continuation.finish()
+                }
+            }
+            return libraryDisplayEvents(asset: libraryAsset, pixelSide: pixelSide, allowNetwork: allowNetwork)
+        }
+        // File: l'anteprima di Quick Look è già quella definitiva.
+        let source = images(for: item, pixelSide: pixelSide, fill: false, allowNetwork: allowNetwork)
+        return AsyncStream { continuation in
+            let task = Task {
+                var delivered = false
+                for await image in source {
+                    delivered = true
+                    continuation.yield(.image(image, isFinal: true))
+                }
+                if !delivered {
+                    continuation.yield(.failed)
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
+    }
+
+    private static func displayOptions(allowNetwork: Bool) -> PHImageRequestOptions {
+        let options = PHImageRequestOptions()
+        options.deliveryMode = .opportunistic
+        options.resizeMode = .fast
+        options.isNetworkAccessAllowed = allowNetwork
+        return options
+    }
+
+    private func libraryDisplayEvents(
+        asset: PHAsset,
+        pixelSide: CGFloat,
+        allowNetwork: Bool
+    ) -> AsyncStream<ImageLoadEvent> {
+        let manager = imageManager
+        let options = Self.displayOptions(allowNetwork: allowNetwork)
+        return AsyncStream { continuation in
+            options.progressHandler = { progress, _, _, _ in
+                continuation.yield(.downloading(progress))
+            }
+            let requestID = manager.requestImage(
+                for: asset,
+                targetSize: CGSize(width: pixelSide, height: pixelSide),
+                contentMode: .aspectFit,
+                options: options
+            ) { image, info in
+                let isDegraded = (info?[PHImageResultIsDegradedKey] as? Bool) ?? false
+                let isCancelled = (info?[PHImageCancelledKey] as? Bool) ?? false
+                let isInCloud = (info?[PHImageResultIsInCloudKey] as? Bool) ?? false
+                let hasError = info?[PHImageErrorKey] != nil
+                if let image {
+                    continuation.yield(.image(image, isFinal: !isDegraded))
+                }
+                if isCancelled {
+                    continuation.finish()
+                } else if !isDegraded {
+                    // Ultima risposta: senza immagine significa che la versione nitida non è arrivata.
+                    if image == nil {
+                        continuation.yield(isInCloud && !allowNetwork ? .needsNetwork : .failed)
+                    }
+                    continuation.finish()
+                } else if hasError {
+                    continuation.yield(.failed)
+                    continuation.finish()
+                }
+            }
+            continuation.onTermination = { _ in
+                manager.cancelImageRequest(requestID)
+            }
+        }
+    }
+
+    /// Prepara in anticipo le immagini dei prossimi elementi, così compaiono subito al cambio di carta.
+    func preheat(_ items: [IndexedItem], pixelSide: CGFloat, allowNetwork: Bool) {
+        var assets: [PHAsset] = []
+        for item in items where item.source == .photoLibrary {
+            if let libraryAsset = asset(for: item.sourceIdentifier) {
+                assets.append(libraryAsset)
+            }
+        }
+        guard !assets.isEmpty else { return }
+        imageManager.startCachingImages(
+            for: assets,
+            targetSize: CGSize(width: pixelSide, height: pixelSide),
+            contentMode: .aspectFit,
+            options: Self.displayOptions(allowNetwork: allowNetwork)
+        )
+    }
+
+    func stopPreheating() {
+        imageManager.stopCachingImagesForAllAssets()
+    }
+
+    // MARK: - File
 
     private func fileImages(url: URL, key: String, pixelSide: CGFloat) -> AsyncStream<UIImage> {
         let cacheKey = "\(key)-\(Int(pixelSide))" as NSString

@@ -142,6 +142,38 @@ enum CleanupPlanner {
         return result
     }
 
+    /// Riordina una coda in modo che gli scatti di uno stesso gruppo siano vicini, con quello
+    /// consigliato per primo: così un gruppo di foto simili si decide in un colpo solo invece di
+    /// ritrovarne i membri sparsi nella sessione. I gruppi restano nell'ordine in cui compare il loro
+    /// primo membro; gli elementi senza gruppo non si spostano rispetto agli altri.
+    static func clusteredByGroup(_ queue: [UUID], groupOf: (UUID) -> ItemGroup?) -> [UUID] {
+        let inQueue = Set(queue)
+        var placed = Set<UUID>()
+        var result: [UUID] = []
+        result.reserveCapacity(queue.count)
+
+        for id in queue {
+            if placed.contains(id) { continue }
+            guard let group = groupOf(id) else {
+                placed.insert(id)
+                result.append(id)
+                continue
+            }
+            var members = group.memberIDs.filter { inQueue.contains($0) && !placed.contains($0) }
+            if let keepID = group.suggestedKeepID, let index = members.firstIndex(of: keepID) {
+                members.remove(at: index)
+                members.insert(keepID, at: 0)
+            }
+            if !members.contains(id) {
+                members.append(id)
+            }
+            for member in members where placed.insert(member).inserted {
+                result.append(member)
+            }
+        }
+        return result
+    }
+
     /// Spazio potenziale complessivo degli elementi indicati.
     static func potentialBytes(of ids: [UUID], _ input: PlannerInput) -> Int64 {
         let wanted = Set(ids)

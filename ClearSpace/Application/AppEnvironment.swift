@@ -199,6 +199,44 @@ final class AppEnvironment {
         conditions.canDownload(wifiOnly: preferences.values.wifiOnlyDownloads)
     }
 
+    // MARK: - Scatto migliore
+
+    /// Calcola subito, per un gruppo, le misure che mancano e aggiorna il candidato suggerito.
+    /// Serve quando si apre un confronto prima che la scansione abbia esaminato quel gruppo.
+    func refineSuggestion(forGroup groupID: UUID) async {
+        guard let group = store.group(groupID), ScanCoordinator.rankedKinds.contains(group.kind) else { return }
+        let missing = store.members(of: group).filter {
+            $0.shot == nil && $0.category == .photo && $0.source == .photoLibrary
+        }
+        guard !missing.isEmpty else { return }
+        let allowNetwork = canDownloadForViewing
+        let updates = await Task.detached(priority: .userInitiated) { () -> [AnalysisUpdate] in
+            var result: [AnalysisUpdate] = []
+            for item in missing {
+                guard let metrics = PhotoAnalysisPipeline.shotMetrics(for: item, allowNetwork: allowNetwork) else {
+                    continue
+                }
+                var update = AnalysisUpdate(id: item.id)
+                update.shot = metrics
+                result.append(update)
+            }
+            return result
+        }.value
+        guard !updates.isEmpty else { return }
+        store.apply(updates)
+        store.refreshSuggestions(kinds: ScanCoordinator.rankedKinds, groupIDs: [groupID]) { members in
+            QualityRanker.suggestion(among: members)
+        }
+    }
+
+    /// Gruppo di simili o duplicati a cui appartiene un elemento. I duplicati hanno la precedenza:
+    /// sono la relazione più stretta.
+    func group(containing item: IndexedItem) -> ItemGroup? {
+        if let id = item.duplicateGroupID, let group = store.group(id) { return group }
+        if let id = item.similarityGroupID, let group = store.group(id) { return group }
+        return nil
+    }
+
     // MARK: - Regole e cartelle
 
     /// Va chiamato dopo una modifica delle regole di protezione.

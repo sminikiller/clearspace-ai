@@ -37,6 +37,13 @@ final class SmokeTests: XCTestCase {
         return app.descendants(matching: .any).matching(predicate).firstMatch
     }
 
+    /// Indicazione che l'analisi è arrivata in fondo: il titolo «Analisi completata» appena finisce,
+    /// oppure la riga «Ultima analisi completata…» quando l'app viene riaperta.
+    private var analysisCompleted: XCUIElement {
+        let predicate = NSPredicate(format: "label CONTAINS[c] %@", "analisi completata")
+        return app.descendants(matching: .any).matching(predicate).firstMatch
+    }
+
     /// Vero se l'elemento è visibile lontano dalle barre in alto e in basso. Sotto le barre traslucide
     /// un elemento risulta comunque toccabile, ma il tocco finisce sulla barra e non apre nulla.
     private func isComfortablyVisible(_ element: XCUIElement) -> Bool {
@@ -137,6 +144,136 @@ final class SmokeTests: XCTestCase {
         pause(0.8)
     }
 
+    // MARK: - Foto simili e video
+
+    /// Foto simili, scelta dello scatto migliore e video nella carta. Usa i contenuti di prova che il
+    /// workflow aggiunge al simulatore: tre scatti della stessa scena (nitido, sfocato, scuro) e un video.
+    /// Il nome fa partire questa prova per prima: le foto simili devono essere ancora tutte presenti.
+    /// Alla fine tutto viene conservato, così la prova successiva ritrova la libreria come se l'aspetta.
+    func testA_SimilarShotsAndVideo() throws {
+        let environment = ProcessInfo.processInfo.environment
+        try XCTSkipUnless(environment["SEEDED_MEDIA"] == "1", "Sul simulatore non ci sono i contenuti di prova")
+        continueAfterFailure = true
+
+        completeOnboardingIfNeeded()
+        XCTAssertTrue(app.buttons["Avvia pulizia intelligente"].waitForExistence(timeout: 40), "La Home non è comparsa")
+        app.tabBars.buttons["Analizza"].tap()
+        XCTAssertTrue(analysisCompleted.waitForExistence(timeout: 300), "L'analisi non è terminata")
+
+        // Esplora → Foto → Foto simili → primo gruppo
+        app.tabBars.buttons["Esplora"].tap()
+        pause(1)
+        let photos = element(startingWith: "Foto")
+        XCTAssertTrue(photos.waitForExistence(timeout: 10), "Manca la sezione Foto")
+        photos.tap()
+        pause(1)
+        let similar = element(startingWith: "Foto simili")
+        bringIntoView(similar)
+        guard similar.exists else {
+            XCTFail("Manca la categoria Foto simili")
+            return
+        }
+        similar.tap()
+        let groupRow = element(containing: "potenziali")
+        guard groupRow.waitForExistence(timeout: 20) else {
+            capture("40-nessun-gruppo")
+            XCTFail("Le tre foto di prova non sono state riconosciute come simili")
+            return
+        }
+        capture("40-foto-simili")
+        groupRow.tap()
+
+        // Confronto: tutte le foto del gruppo, lo scatto consigliato e il motivo
+        XCTAssertTrue(app.navigationBars["Confronto"].waitForExistence(timeout: 10), "Il confronto non si è aperto")
+        XCTAssertTrue(
+            element(startingWith: "Conserva la foto").waitForExistence(timeout: 30),
+            "Manca l'indicazione dello scatto consigliato"
+        )
+        pause(3)
+        capture("41-confronto")
+
+        // Zoom condiviso: si ingrandisce una foto e si passa a un'altra restando sullo stesso punto
+        let window = app.windows.firstMatch
+        window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).doubleTap()
+        pause(1.5)
+        capture("42-confronto-zoom")
+        let second = element(startingWith: "Foto 2")
+        if second.waitForExistence(timeout: 5) {
+            second.tap()
+            pause(2)
+            capture("43-confronto-zoom-altra-foto")
+        }
+        let third = element(startingWith: "Foto 3")
+        if third.exists {
+            third.tap()
+            pause(2)
+            capture("44-confronto-zoom-terza-foto")
+        }
+
+        // Tieni solo la migliore: le altre passano alla revisione, nulla viene eliminato
+        let keepBest = app.buttons["Tieni solo la migliore"]
+        XCTAssertTrue(keepBest.waitForExistence(timeout: 5), "Manca il pulsante per tenere la migliore")
+        keepBest.tap()
+        XCTAssertTrue(
+            element(containing: "alla revisione").waitForExistence(timeout: 6),
+            "La scelta sul gruppo non è stata registrata"
+        )
+        capture("45-migliore-tenuta")
+
+        // Si rimette tutto com'era: le tre foto vengono conservate
+        let keepAll = app.buttons["Tieni tutte"]
+        XCTAssertTrue(keepAll.waitForExistence(timeout: 5), "Manca il pulsante per tenerle tutte")
+        keepAll.tap()
+        XCTAssertTrue(
+            element(containing: "sono stati conservati").waitForExistence(timeout: 6),
+            "Le foto non sono state riportate tra quelle conservate"
+        )
+        goBack()
+        goBack()
+        goBack()
+
+        // Video: si riproduce dentro la carta, senza aprire altre schermate
+        guard environment["SEEDED_VIDEO"] == "1" else { return }
+        let videos = element(startingWith: "Video")
+        bringIntoView(videos)
+        guard videos.exists else {
+            XCTFail("Manca la sezione Video")
+            return
+        }
+        videos.tap()
+        pause(1)
+        let allVideos = element(startingWith: "Tutti i video")
+        guard allVideos.waitForExistence(timeout: 10) else {
+            XCTFail("Manca la categoria Tutti i video")
+            return
+        }
+        allVideos.tap()
+        let swipeButton = app.buttons["Rivedi con gli swipe"]
+        guard swipeButton.waitForExistence(timeout: 30) else {
+            capture("46-nessun-video")
+            XCTFail("Il video di prova non è tra quelli da rivedere")
+            return
+        }
+        swipeButton.tap()
+        let keep = app.buttons["Conserva"]
+        XCTAssertTrue(keep.waitForExistence(timeout: 20), "La modalità swipe non si è aperta")
+        pause(4)
+        capture("46-video-nella-carta")
+        // Un tocco sul video lo mette in pausa
+        window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35)).tap()
+        pause(1.5)
+        capture("47-video-in-pausa")
+
+        keep.tap()
+        XCTAssertTrue(
+            element(containing: "Sessione completata").waitForExistence(timeout: 10),
+            "La sessione non si è conclusa dopo l'ultimo elemento"
+        )
+        capture("48-sessione-completata")
+        app.buttons["Chiudi"].firstMatch.tap()
+        pause(1)
+    }
+
     // MARK: - Flusso principale: analisi, swipe, revisione, eliminazione confermata
 
     func testCleanupFlow() throws {
@@ -148,10 +285,7 @@ final class SmokeTests: XCTestCase {
 
         // Analisi: deve arrivare in fondo da sola
         app.tabBars.buttons["Analizza"].tap()
-        XCTAssertTrue(
-            element(containing: "Analisi completata").waitForExistence(timeout: 300),
-            "L'analisi non è terminata"
-        )
+        XCTAssertTrue(analysisCompleted.waitForExistence(timeout: 300), "L'analisi non è terminata")
         capture("02-analizza")
 
         app.tabBars.buttons["Home"].tap()

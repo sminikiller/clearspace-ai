@@ -202,6 +202,10 @@ final class ScanCoordinator {
                 activity = "Ricerca di probabili duplicati"
                 guard await groupVisualDuplicates() else { return finish(cancelled: true) }
             }
+            if plan.isUnlocked(.similarPhotos) {
+                activity = "Scelta dello scatto migliore"
+                guard await rankSimilarShots() else { return finish(cancelled: true) }
+            }
         }
         setProgress(.previews, 1, 1)
 
@@ -412,6 +416,26 @@ final class ScanCoordinator {
         guard let groups else { return false }
         store.replaceGroups(kinds: [.visualDuplicate], scope: .photoLibrary, with: groups)
         return true
+    }
+
+    /// Gruppi in cui lo scatto da conservare si sceglie confrontando la qualità.
+    static let rankedKinds: Set<GroupKind> = [.similar, .burst, .visualDuplicate]
+
+    /// Confronta tra loro gli scatti di ogni gruppo con misure più precise di quelle della scansione
+    /// generale (volti, occhi, nitidezza del soggetto) e aggiorna il candidato suggerito.
+    private func rankSimilarShots() async -> Bool {
+        let pending = store.itemsMissingShotMetrics(kinds: Self.rankedKinds)
+        guard !pending.isEmpty else { return true }
+        let completed = await photoPipeline.analyzeShots(
+            items: pending,
+            control: makeControl(.previews)
+        ) { [store] updates in
+            await store.apply(updates)
+        }
+        store.refreshSuggestions(kinds: Self.rankedKinds) { members in
+            QualityRanker.suggestion(among: members)
+        }
+        return completed
     }
 
     // MARK: - Fase C

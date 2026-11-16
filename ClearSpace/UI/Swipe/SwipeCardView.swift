@@ -1,10 +1,16 @@
 import SwiftUI
 
 /// Carta della modalità swipe: l'elemento a tutta larghezza con le informazioni essenziali.
-/// Il pizzico ingrandisce l'immagine per controllarne la qualità; il doppio tocco la apre a tutto schermo.
+///
+/// - Le foto vengono caricate nella versione nitida (scaricandola da iCloud quando serve) e si
+///   ingrandiscono con il pizzico, per controllarne la qualità prima di decidere.
+/// - I video si riproducono direttamente nella carta.
+/// - Se l'elemento fa parte di un gruppo di simili, la carta dice se è lo scatto consigliato.
 struct SwipeCardView: View {
     let item: IndexedItem
     var isInteractive = true
+    /// Gruppo di simili o duplicati a cui appartiene l'elemento, se esiste.
+    var group: ItemGroup?
     var onExpand: () -> Void = {}
 
     @State private var zoom: CGFloat = 1
@@ -25,19 +31,9 @@ struct SwipeCardView: View {
     private var media: some View {
         Color.black
             .overlay {
-                ItemThumbnailView(item: item, pointSide: 430, fill: false, allowsNetwork: true)
-                    .scaleEffect(zoom, anchor: zoomAnchor)
+                mediaContent
             }
             .clipped()
-            .overlay {
-                if item.isVideo {
-                    Image(systemName: "play.circle.fill")
-                        .font(.system(size: 58))
-                        .symbolRenderingMode(.palette)
-                        .foregroundStyle(.white, .black.opacity(0.45))
-                        .accessibilityHidden(true)
-                }
-            }
             .overlay(alignment: .topLeading) {
                 badges
                     .padding(10)
@@ -51,23 +47,34 @@ struct SwipeCardView: View {
                             .frame(width: 34, height: 34)
                             .background(.black.opacity(0.5), in: Circle())
                     }
+                    .buttonStyle(.plain)
                     .padding(10)
-                    .accessibilityLabel(item.isVideo ? "Riproduci" : "Apri a tutto schermo")
+                    .accessibilityLabel("Apri a tutto schermo")
                 }
             }
-            .contentShape(Rectangle())
-            .onTapGesture(count: 2) {
-                if isInteractive {
+    }
+
+    @ViewBuilder
+    private var mediaContent: some View {
+        if !isInteractive {
+            // La carta in attesa sotto quella corrente mostra solo la miniatura.
+            ItemThumbnailView(item: item, pointSide: 430, fill: false, allowsNetwork: true)
+        } else if item.isVideo {
+            InlineVideoView(item: item)
+        } else {
+            ItemImageView(item: item, pixelSide: 2_048, zoom: zoom, zoomAnchor: zoomAnchor)
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) {
                     onExpand()
                 }
-            }
-            .gesture(magnifyGesture, including: isInteractive ? .all : .none)
+                .gesture(magnifyGesture)
+        }
     }
 
     private var magnifyGesture: some Gesture {
         MagnifyGesture()
             .onChanged { value in
-                zoom = min(max(value.magnification, 1), 5)
+                zoom = min(max(value.magnification, 1), 6)
                 zoomAnchor = value.startAnchor
             }
             .onEnded { _ in
@@ -79,6 +86,15 @@ struct SwipeCardView: View {
 
     private var badges: some View {
         VStack(alignment: .leading, spacing: 5) {
+            if let group {
+                if group.suggestedKeepID == item.id {
+                    cardBadge("Migliore del gruppo", "star.fill", tint: Theme.keep)
+                } else if group.kind.isDuplicateKind {
+                    cardBadge("Ha \(group.memberIDs.count - 1) \(group.memberIDs.count == 2 ? "copia" : "copie")", "square.on.square")
+                } else {
+                    cardBadge("\(group.memberIDs.count) scatti simili", "square.stack.3d.down.right")
+                }
+            }
             if item.traits.contains(.livePhoto) {
                 cardBadge("Live", "livephoto")
             }
@@ -88,10 +104,8 @@ struct SwipeCardView: View {
             if item.isSensitive {
                 cardBadge("Da controllare", "exclamationmark.shield")
             }
-            if item.duplicateGroupID != nil {
-                cardBadge("Ha duplicati", "square.on.square")
-            } else if item.similarityGroupID != nil {
-                cardBadge("Ha simili", "square.stack.3d.down.right")
+            if let shot = item.shot, shot.hasClosedEyes {
+                cardBadge("Occhi chiusi", "eye.slash")
             }
             if item.isLowQuality {
                 cardBadge(lowQualityLabel, "camera.metering.unknown")
@@ -105,13 +119,13 @@ struct SwipeCardView: View {
         return "Forse sfocata"
     }
 
-    private func cardBadge(_ text: String, _ systemImage: String) -> some View {
+    private func cardBadge(_ text: String, _ systemImage: String, tint: Color = .black.opacity(0.55)) -> some View {
         Label(text, systemImage: systemImage)
             .font(.caption.weight(.semibold))
             .foregroundStyle(.white)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(.black.opacity(0.55), in: Capsule())
+            .background(tint, in: Capsule())
     }
 
     private var caption: some View {
@@ -139,6 +153,9 @@ struct SwipeCardView: View {
             parts.append(Format.duration(item.duration))
         }
         parts.append(Format.date(item.createdAt))
+        if item.isImage, item.shot != nil || item.sharpness != nil {
+            parts.append("Qualità \(QualityRanker.breakdown(item).grade)/100")
+        }
         return parts.joined(separator: " · ")
     }
 }

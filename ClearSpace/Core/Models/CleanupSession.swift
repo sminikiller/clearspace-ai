@@ -95,6 +95,33 @@ struct SwipeDecision: Codable, Hashable, Sendable {
     let previousStatus: ReviewStatus
     let bytes: Int64
     let date: Date
+    /// Decisioni prese insieme (es. "tieni solo la migliore" su un gruppo di foto simili):
+    /// condividono lo stesso identificativo e si annullano con un solo gesto.
+    var batchID: UUID?
+
+    init(
+        itemID: UUID,
+        choice: SwipeChoice,
+        previousStatus: ReviewStatus,
+        bytes: Int64,
+        date: Date,
+        batchID: UUID? = nil
+    ) {
+        self.itemID = itemID
+        self.choice = choice
+        self.previousStatus = previousStatus
+        self.bytes = bytes
+        self.date = date
+        self.batchID = batchID
+    }
+}
+
+/// Scelta su un elemento, da registrare in blocco insieme ad altre.
+struct BatchChoice: Equatable, Sendable {
+    let itemID: UUID
+    let choice: SwipeChoice
+    let previousStatus: ReviewStatus
+    let bytes: Int64
 }
 
 /// Sessione di pulizia. Viene salvata a ogni decisione, quindi può essere ripresa in qualsiasi momento.
@@ -204,6 +231,50 @@ struct CleanupSession: Identifiable, Codable, Hashable, Sendable {
         isCompleted = false
         updatedAt = date
         return last
+    }
+
+    /// Registra più decisioni prese insieme, ad esempio su un gruppo di foto simili.
+    /// Il cursore non si sposta: gli elementi già decisi vengono saltati quando arriva il loro turno
+    /// (vedi `SessionManager`). Le decisioni condividono `batchID` e si annullano insieme.
+    mutating func recordBatch(_ choices: [BatchChoice], batchID: UUID = UUID(), at date: Date = Date()) {
+        guard !choices.isEmpty else { return }
+        for entry in choices {
+            decisions.append(
+                SwipeDecision(
+                    itemID: entry.itemID,
+                    choice: entry.choice,
+                    previousStatus: entry.previousStatus,
+                    bytes: entry.bytes,
+                    date: date,
+                    batchID: batchID
+                )
+            )
+        }
+        updatedAt = date
+    }
+
+    /// Annulla l'ultima mossa: una decisione singola oppure tutte quelle prese in blocco.
+    /// Il cursore torna sul primo degli elementi annullati già superati; quelli ancora da raggiungere
+    /// non lo spostano. Restituisce le decisioni annullate, dalla più recente.
+    mutating func undoLastMove(at date: Date = Date()) -> [SwipeDecision] {
+        guard let last = decisions.last else { return [] }
+        guard let batchID = last.batchID else {
+            if let single = undoLast(at: date) { return [single] }
+            return []
+        }
+        var undone: [SwipeDecision] = []
+        while let candidate = decisions.last, candidate.batchID == batchID {
+            decisions.removeLast()
+            undone.append(candidate)
+        }
+        let upperBound = min(cursor, queue.count)
+        let passed = undone.compactMap { queue[..<upperBound].lastIndex(of: $0.itemID) }
+        if let earliest = passed.min() {
+            cursor = earliest
+        }
+        isCompleted = false
+        updatedAt = date
+        return undone
     }
 
     /// Rimette in coda gli elementi rimandati, per rivederli alla fine.

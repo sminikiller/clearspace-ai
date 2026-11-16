@@ -47,12 +47,24 @@ enum AppConfiguration {
         static let similarScreenshotDistance: Float = 0.25
         static let duplicateFeatureDistance: Float = 0.12
         static let similarVideoDistance: Float = 0.35
+        /// Bit di differenza (su 64) entro cui due hash percettivi indicano scatti simili.
+        /// Usato solo quando il confronto di Vision non è disponibile.
+        static let similarHashDistance = 10
 
         /// Varianza del laplaciano (miniatura da 512 px) sotto cui una foto è probabilmente sfocata.
         static let blurVariance = 60.0
         static let sharpVariance = 1_000.0
         static let darkBrightness = 0.10
         static let blankContrast = 0.02
+
+        /// Lato dell'anteprima usata per confrontare tra loro gli scatti simili.
+        static let shotAnalysisSide = 1_024
+        /// Sotto questo lato l'anteprima disponibile è troppo piccola per un confronto affidabile.
+        static let shotAnalysisMinimumSide = 600
+        /// Varianza del laplaciano che corrisponde a "nitidissima" su un'anteprima da 1024 px.
+        static let detailSharpVariance = 600.0
+        /// Un volto più piccolo di questa quota dell'immagine è quasi certamente sullo sfondo.
+        static let minimumFaceArea = 0.004
 
         /// Silenzio considerato "lungo" in una registrazione audio.
         static let longSilence: Double = 5

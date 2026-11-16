@@ -20,16 +20,32 @@ enum ImageMetrics {
 
     /// Varianza del laplaciano: valori bassi indicano un'immagine probabilmente sfocata.
     static func laplacianVariance(_ image: GrayImage) -> Double {
+        laplacianVariance(
+            image,
+            region: PixelRegion(minX: 0, minY: 0, maxX: image.width, maxY: image.height)
+        )
+    }
+
+    /// Varianza del laplaciano limitata a una regione: serve a misurare la nitidezza del soggetto
+    /// (un volto, il centro dell'inquadratura) invece di quella dell'intera immagine.
+    static func laplacianVariance(_ image: GrayImage, region: PixelRegion) -> Double {
         let width = image.width
         let height = image.height
         guard width >= 3, height >= 3 else { return 0 }
 
+        // Il bordo dell'immagine è escluso: ogni pixel deve avere i quattro vicini.
+        let startX = max(1, region.minX)
+        let endX = min(width - 1, region.maxX)
+        let startY = max(1, region.minY)
+        let endY = min(height - 1, region.maxY)
+        guard endX > startX, endY > startY else { return 0 }
+
         var sum = 0.0
         var sumOfSquares = 0.0
         image.pixels.withUnsafeBufferPointer { pixels in
-            for y in 1..<(height - 1) {
+            for y in startY..<endY {
                 let row = y * width
-                for x in 1..<(width - 1) {
+                for x in startX..<endX {
                     let index = row + x
                     let neighbours = Int(pixels[index - width]) + Int(pixels[index + width])
                         + Int(pixels[index - 1]) + Int(pixels[index + 1])
@@ -39,9 +55,42 @@ enum ImageMetrics {
                 }
             }
         }
-        let count = Double((width - 2) * (height - 2))
+        let count = Double((endX - startX) * (endY - startY))
         let mean = sum / count
         return max(0, sumOfSquares / count - mean * mean)
+    }
+
+    /// Regione in pixel di un rettangolo normalizzato (0…1) con l'origine in basso a sinistra,
+    /// come quelli restituiti da Vision. Le righe dell'immagine partono invece dall'alto.
+    static func region(
+        normalizedX x: Double,
+        y: Double,
+        width boxWidth: Double,
+        height boxHeight: Double,
+        in image: GrayImage
+    ) -> PixelRegion {
+        let imageWidth = Double(image.width)
+        let imageHeight = Double(image.height)
+        let left = min(max(x, 0), 1)
+        let right = min(max(x + boxWidth, 0), 1)
+        let bottom = min(max(y, 0), 1)
+        let top = min(max(y + boxHeight, 0), 1)
+        return PixelRegion(
+            minX: Int((left * imageWidth).rounded(.down)),
+            minY: Int(((1 - top) * imageHeight).rounded(.down)),
+            maxX: Int((right * imageWidth).rounded(.up)),
+            maxY: Int(((1 - bottom) * imageHeight).rounded(.up))
+        )
+    }
+
+    /// Zona centrale dell'immagine: metà della larghezza e metà dell'altezza.
+    static func centralRegion(of image: GrayImage) -> PixelRegion {
+        PixelRegion(
+            minX: image.width / 4,
+            minY: image.height / 4,
+            maxX: image.width - image.width / 4,
+            maxY: image.height - image.height / 4
+        )
     }
 
     /// Luminosità media e contrasto (deviazione standard), entrambi tra 0 e 1.
@@ -63,6 +112,13 @@ enum ImageMetrics {
     /// Nitidezza normalizzata tra 0 e 1.
     static func sharpnessScore(variance: Double) -> Double {
         let ratio = max(0, variance) / AppConfiguration.Thresholds.sharpVariance
+        return min(1, ratio.squareRoot())
+    }
+
+    /// Nitidezza normalizzata per le anteprime grandi usate nel confronto tra scatti simili.
+    /// A risoluzione maggiore i contorni occupano più pixel e la varianza è più bassa: serve una scala diversa.
+    static func detailSharpnessScore(variance: Double) -> Double {
+        let ratio = max(0, variance) / AppConfiguration.Thresholds.detailSharpVariance
         return min(1, ratio.squareRoot())
     }
 

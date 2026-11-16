@@ -209,9 +209,10 @@ actor PhotoAnalysisPipeline {
         in bucket: [IndexedItem],
         threshold: (IndexedItem, IndexedItem) -> Float
     ) -> [[IndexedItem]] {
-        var entries: [(item: IndexedItem, observation: VNFeaturePrintObservation)] = []
+        var entries: [(item: IndexedItem, observation: VNFeaturePrintObservation?)] = []
         for item in bucket {
-            guard let observation = featurePrint(for: item) else { continue }
+            let observation = featurePrint(for: item)
+            if observation == nil && item.perceptualHash == nil { continue }
             entries.append((item, observation))
         }
         guard entries.count >= 2 else { return [] }
@@ -219,10 +220,15 @@ actor PhotoAnalysisPipeline {
         var sets = DisjointSet(count: entries.count)
         for first in 0..<(entries.count - 1) {
             for second in (first + 1)..<entries.count {
-                guard let distance = ImageAnalyzer.distance(entries[first].observation, entries[second].observation) else {
-                    continue
-                }
-                if distance < threshold(entries[first].item, entries[second].item) {
+                let firstItem = entries[first].item
+                let secondItem = entries[second].item
+                if let firstPrint = entries[first].observation,
+                   let secondPrint = entries[second].observation,
+                   let distance = ImageAnalyzer.distance(firstPrint, secondPrint) {
+                    if distance < threshold(firstItem, secondItem) {
+                        sets.union(first, second)
+                    }
+                } else if hashesLookAlike(firstItem, secondItem) {
                     sets.union(first, second)
                 }
             }
@@ -232,12 +238,74 @@ actor PhotoAnalysisPipeline {
             .map { indices in indices.map { entries[$0].item } }
     }
 
+    /// Confronto di riserva per quando Vision non riesce a produrre l'impronta di un'immagine
+    /// (succede su alcuni dispositivi e simulatori): si usa l'hash percettivo delle anteprime.
+    private static func hashesLookAlike(_ first: IndexedItem, _ second: IndexedItem) -> Bool {
+        guard let firstHash = first.perceptualHash, let secondHash = second.perceptualHash,
+              ImageMetrics.isInformative(hash: firstHash), ImageMetrics.isInformative(hash: secondHash) else {
+            return false
+        }
+        return ImageMetrics.hammingDistance(firstHash, secondHash) <= AppConfiguration.Thresholds.similarHashDistance
+    }
+
     private static func featurePrint(for item: IndexedItem) -> VNFeaturePrintObservation? {
         guard let asset = PhotoLibraryService.asset(item.sourceIdentifier),
               let image = AnalysisImageLoader.thumbnail(for: asset, maxSide: 360) else {
             return nil
         }
         return ImageAnalyzer.featurePrint(for: image)
+    }
+
+    // MARK: - Scelta dello scatto migliore
+
+    /// Calcola, per i membri dei gruppi di foto simili, le misure che servono a scegliere lo scatto
+    /// migliore: nitidezza dell'immagine e del soggetto, qualità dei volti, occhi aperti, giudizio estetico.
+    /// Restituisce `false` se l'analisi è stata interrotta.
+    func analyzeShots(
+        items: [IndexedItem],
+        control: ScanControl,
+        apply: @Sendable ([AnalysisUpdate]) async -> Void
+    ) async -> Bool {
+        var pending: [AnalysisUpdate] = []
+        var processed = 0
+        for item in items {
+            let allowNetwork = await control.networkAllowed()
+            let metrics = autoreleasepool { Self.shotMetrics(for: item, allowNetwork: allowNetwork) }
+            if let metrics {
+                var update = AnalysisUpdate(id: item.id)
+                update.shot = metrics
+                pending.append(update)
+            }
+            processed += 1
+            if processed % 12 == 0 {
+                if !pending.isEmpty {
+                    await apply(pending)
+                    pending.removeAll(keepingCapacity: true)
+                }
+                await control.progress(processed, items.count)
+                if !(await control.shouldContinue()) { return false }
+            }
+        }
+        if !pending.isEmpty {
+            await apply(pending)
+        }
+        await control.progress(items.count, items.count)
+        return true
+    }
+
+    /// Misure di uno scatto, lette da un'anteprima abbastanza grande da distinguere due foto simili.
+    /// Restituisce `nil` se sul dispositivo è disponibile soltanto una miniatura.
+    static func shotMetrics(for item: IndexedItem, allowNetwork: Bool) -> ShotMetrics? {
+        guard item.source == .photoLibrary,
+              let asset = PhotoLibraryService.asset(item.sourceIdentifier),
+              let image = AnalysisImageLoader.thumbnail(
+                  for: asset,
+                  maxSide: CGFloat(AppConfiguration.Thresholds.shotAnalysisSide),
+                  allowNetwork: allowNetwork
+              ) else {
+            return nil
+        }
+        return ShotAnalyzer.analyze(image)
     }
 
     // MARK: - Probabili duplicati (confronto delle anteprime)

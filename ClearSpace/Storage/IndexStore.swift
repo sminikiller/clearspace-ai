@@ -267,6 +267,49 @@ final class IndexStore {
         didChange(index: true, review: false, immediate: false)
     }
 
+    /// Ricalcola il candidato suggerito dei gruppi indicati, senza cambiarne i membri.
+    /// Serve dopo il confronto approfondito degli scatti, quando sono disponibili misure più precise.
+    /// Con `groupIDs` valorizzato vengono considerati soltanto quei gruppi.
+    func refreshSuggestions(
+        kinds: Set<GroupKind>,
+        groupIDs: Set<UUID>? = nil,
+        using rank: ([IndexedItem]) -> QualityRanker.Suggestion?
+    ) {
+        var changed = false
+        for (groupID, group) in groupsByID where kinds.contains(group.kind) {
+            if let groupIDs, !groupIDs.contains(groupID) { continue }
+            let members = group.memberIDs.compactMap { itemsByID[$0] }
+            guard let suggestion = rank(members) else { continue }
+            if group.suggestedKeepID == suggestion.keepID && group.suggestionReason == suggestion.reason {
+                continue
+            }
+            var updated = group
+            updated.suggestedKeepID = suggestion.keepID
+            updated.suggestionReason = suggestion.reason
+            groupsByID[groupID] = updated
+            changed = true
+        }
+        if changed {
+            didChange(index: true, review: false, immediate: true)
+        }
+    }
+
+    /// Membri dei gruppi dei tipi indicati a cui mancano ancora le misure per il confronto tra scatti.
+    func itemsMissingShotMetrics(kinds: Set<GroupKind>) -> [IndexedItem] {
+        var seen = Set<UUID>()
+        var result: [IndexedItem] = []
+        for group in groupsByID.values where kinds.contains(group.kind) {
+            for memberID in group.memberIDs {
+                guard let member = itemsByID[memberID], member.shot == nil, member.category == .photo,
+                      seen.insert(memberID).inserted else {
+                    continue
+                }
+                result.append(member)
+            }
+        }
+        return result
+    }
+
     private func pruneGroupsSilently() {
         for (groupID, group) in groupsByID {
             let valid = group.memberIDs.filter { memberID in

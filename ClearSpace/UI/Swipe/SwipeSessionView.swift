@@ -17,10 +17,20 @@ struct SwipeSessionView: View {
     @State private var isCommitting = false
     @State private var detailItem: IndexedItem?
     @State private var previewItem: IndexedItem?
+    @State private var comparison: ComparisonTarget?
     @State private var toast: String?
     @State private var feedbackTrigger = 0
+    @State private var markTrigger = 0
 
     private var sessions: SessionManager { env.sessions }
+
+    /// Confronto da aprire: il gruppo e la foto da cui si parte.
+    private struct ComparisonTarget: Identifiable {
+        let groupID: UUID
+        let itemID: UUID
+
+        var id: UUID { groupID }
+    }
 
     var body: some View {
         NavigationStack {
@@ -50,21 +60,63 @@ struct SwipeSessionView: View {
         .fullScreenCover(item: $previewItem) { item in
             ItemPreviewScreen(itemID: item.id, showsActions: false)
         }
+        .fullScreenCover(item: $comparison) { target in
+            NavigationStack {
+                GroupComparisonView(
+                    groupID: target.groupID,
+                    initialItemID: target.itemID,
+                    closesAfterDecision: true
+                )
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Chiudi") {
+                            comparison = nil
+                        }
+                    }
+                }
+            }
+        }
         .toast($toast)
         .sensoryFeedback(.selection, trigger: feedbackTrigger)
+        .sensoryFeedback(.impact(weight: .medium), trigger: markTrigger)
         .onChange(of: env.store.revision) { _, _ in
-            // Se un elemento sparisce mentre la sessione è aperta, si passa al successivo.
+            // Se un elemento sparisce o viene deciso altrove (ad esempio dal confronto di un gruppo),
+            // si passa al successivo.
             sessions.skipUnavailableItems()
         }
+        .task(id: sessions.currentItem?.id) {
+            preheatUpcoming()
+        }
+        .onDisappear {
+            env.thumbnails.stopPreheating()
+        }
+    }
+
+    /// Prepara le immagini delle prossime carte, così compaiono subito.
+    private func preheatUpcoming() {
+        let upcoming = sessions.upcomingItems(limit: 3).filter { $0.isImage }
+        env.thumbnails.preheat(upcoming, pixelSide: 2_048, allowNetwork: env.canDownloadForViewing)
     }
 
     @ViewBuilder
     private var content: some View {
         if let session = sessions.active {
             if let item = sessions.currentItem {
+                let group = env.group(containing: item)
                 VStack(spacing: 12) {
                     SessionHeaderView(session: session)
-                    deck(current: item)
+                    deck(current: item, group: group)
+                    if let group {
+                        SimilarStripView(
+                            group: group,
+                            members: env.store.members(of: group),
+                            currentID: item.id,
+                            onCompare: { memberID in
+                                comparison = ComparisonTarget(groupID: group.id, itemID: memberID)
+                            },
+                            onKeepBest: { keepBest(of: group) }
+                        )
+                    }
                     SwipeActionBar(
                         canUndo: sessions.canUndo,
                         onDelete: { commit(.delete) },
@@ -95,9 +147,9 @@ struct SwipeSessionView: View {
 
     // MARK: - Mazzo di carte
 
-    private func deck(current item: IndexedItem) -> some View {
+    private func deck(current item: IndexedItem, group: ItemGroup?) -> some View {
         ZStack {
-            if let next = sessions.item(atOffset: 1) {
+            if let next = sessions.upcomingItems(limit: 1).first {
                 // La carta successiva è già pronta sotto quella corrente.
                 SwipeCardView(item: next, isInteractive: false)
                     .scaleEffect(0.95)
@@ -105,7 +157,7 @@ struct SwipeSessionView: View {
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
-            SwipeCardView(item: item, isInteractive: true, onExpand: { previewItem = item })
+            SwipeCardView(item: item, isInteractive: true, group: group, onExpand: { previewItem = item })
                 .overlay {
                     SwipeStampOverlay(offset: offset)
                 }
@@ -118,6 +170,7 @@ struct SwipeSessionView: View {
                 .accessibilityAction(named: "Aggiungi alla lista da eliminare") { commit(.delete) }
                 .accessibilityAction(named: "Più tardi") { commit(.postpone) }
                 .accessibilityAction(named: "Dettagli") { detailItem = item }
+                .accessibilityAction(named: "Apri a tutto schermo") { previewItem = item }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -189,7 +242,11 @@ struct SwipeSessionView: View {
             let result = sessions.decide(choice)
             offset = .zero
             isCommitting = false
-            feedbackTrigger += 1
+            if choice == .delete {
+                markTrigger += 1
+            } else {
+                feedbackTrigger += 1
+            }
             if result == .appliedWithCaution {
                 toast = "Contenuto potenzialmente importante: sarà evidenziato nella revisione."
             }
@@ -197,10 +254,26 @@ struct SwipeSessionView: View {
     }
 
     private func undo() {
-        if sessions.undo() {
-            feedbackTrigger += 1
-            toast = "Ultima scelta annullata."
+        let undone = sessions.undo()
+        guard undone > 0 else { return }
+        feedbackTrigger += 1
+        toast = undone == 1
+            ? "Ultima scelta annullata."
+            : "Scelta sul gruppo annullata: \(undone) elementi ripristinati."
+    }
+
+    /// Conserva lo scatto consigliato del gruppo e propone gli altri per l'eliminazione, in un solo gesto.
+    /// Come ogni scelta, passa dalla revisione: nulla viene eliminato qui.
+    private func keepBest(of group: ItemGroup) {
+        guard let keepID = group.suggestedKeepID else { return }
+        let others = group.memberIDs.filter { $0 != keepID }
+        let result = sessions.decideGroup(keep: [keepID], delete: others)
+        markTrigger += 1
+        var message = "Tenuta la migliore: \(Format.plural(result.applied, "scatto aggiunto", "scatti aggiunti")) alla revisione."
+        if result.blocked > 0 {
+            message += " \(Format.plural(result.blocked, "protetto saltato", "protetti saltati"))."
         }
+        toast = message
     }
 
     private func openReview() {

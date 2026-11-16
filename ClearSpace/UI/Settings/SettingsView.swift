@@ -16,6 +16,7 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 analysisSection
+                reviewSection
                 thresholdsSection
                 iCloudSection
 
@@ -79,6 +80,16 @@ struct SettingsView: View {
             Text("Analisi")
         } footer: {
             Text("Le analisi avvengono sul dispositivo. Il download degli originali da iCloud serve solo a verificare i duplicati esatti e resta disattivato finché non lo consenti. Le foto nascoste, se incluse, restano protette.")
+        }
+    }
+
+    private var reviewSection: some View {
+        Section {
+            Toggle("Riproduci i video automaticamente", isOn: env.preferences.binding(\.autoplayVideos))
+        } header: {
+            Text("Revisione")
+        } footer: {
+            Text("Nella modalità swipe i video partono da soli, senza audio: un tocco li mette in pausa, il pulsante dell'altoparlante attiva il sonoro. Le anteprime nitide delle foto su iCloud vengono scaricate rispettando l'impostazione Wi‑Fi qui sopra.")
         }
     }
 

@@ -81,6 +81,20 @@ struct ItemDetailView: View {
                 if let sharpness = item.sharpness, item.isImage {
                     DetailRow(label: "Nitidezza", value: Format.percent(sharpness))
                 }
+                if let shot = item.shot, item.isImage {
+                    // Misure del confronto tra scatti simili: sono quelle che decidono quale viene consigliato.
+                    DetailRow(label: "Voto dello scatto", value: "\(QualityRanker.breakdown(item).grade)/100")
+                    DetailRow(label: "Nitidezza nel dettaglio", value: Format.percent(shot.detailSharpness))
+                    if let subject = shot.subjectSharpness {
+                        DetailRow(label: "Nitidezza del soggetto", value: Format.percent(subject))
+                    }
+                    if shot.faceCount > 0 {
+                        DetailRow(label: "Volti", value: faceDescription(shot))
+                    }
+                    if let aesthetics = shot.aesthetics {
+                        DetailRow(label: "Giudizio estetico", value: Format.percent((aesthetics + 1) / 2))
+                    }
+                }
                 if item.contentHash != nil {
                     DetailRow(label: "Contenuto", value: "Verificato con SHA-256")
                 }
@@ -186,6 +200,23 @@ struct ItemDetailView: View {
         case .appImports:
             return "Copia importata in ClearSpace"
         }
+    }
+
+    /// "2 · qualità 74% · occhi aperti".
+    private func faceDescription(_ shot: ShotMetrics) -> String {
+        var parts = [String(shot.faceCount)]
+        if let quality = shot.faceQuality {
+            parts.append("qualità \(Format.percent(quality))")
+        }
+        if shot.hasClosedEyes {
+            parts.append("occhi chiusi")
+        } else if shot.openEyes != nil {
+            parts.append("occhi aperti")
+        }
+        if let smiles = shot.smiles, smiles >= 0.5 {
+            parts.append("sorriso")
+        }
+        return parts.joined(separator: " · ")
     }
 
     private func traitLabels(for item: IndexedItem) -> [String] {

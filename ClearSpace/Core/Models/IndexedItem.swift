@@ -218,6 +218,8 @@ struct IndexedItem: Identifiable, Codable, Hashable, Sendable {
     var similarityGroupID: UUID?
     var sharpness: Double?
     var brightness: Double?
+    /// Misure per il confronto tra scatti simili: presenti solo per i membri dei gruppi.
+    var shot: ShotMetrics?
     /// Testo riconosciuto (OCR) o trascrizione, troncato.
     var textContent: String?
     /// Impronta compatta dell'andamento sonoro, per confrontare le registrazioni tra loro.
@@ -275,6 +277,7 @@ struct IndexedItem: Identifiable, Codable, Hashable, Sendable {
         self.similarityGroupID = nil
         self.sharpness = nil
         self.brightness = nil
+        self.shot = nil
         self.textContent = nil
         self.fingerprint = nil
         self.analysisStatus = .metadataOnly
@@ -390,6 +393,7 @@ extension IndexedItem {
             similarityGroupID = nil
             sharpness = nil
             brightness = nil
+            shot = nil
             textContent = nil
             fingerprint = nil
             pageCount = fresh.pageCount
