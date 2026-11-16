@@ -87,9 +87,21 @@ struct SwipeSessionView: View {
         .task(id: sessions.currentItem?.id) {
             preheatUpcoming()
         }
+        .task(id: currentGroupID) {
+            // Se la scansione non ha ancora confrontato gli scatti di questo gruppo lo si fa adesso,
+            // così il consiglio mostrato nella striscia usa già tutti i criteri.
+            if let currentGroupID {
+                await env.refineSuggestion(forGroup: currentGroupID)
+            }
+        }
         .onDisappear {
             env.thumbnails.stopPreheating()
         }
+    }
+
+    private var currentGroupID: UUID? {
+        guard let item = sessions.currentItem else { return nil }
+        return env.group(containing: item)?.id
     }
 
     /// Prepara le immagini delle prossime carte, così compaiono subito.

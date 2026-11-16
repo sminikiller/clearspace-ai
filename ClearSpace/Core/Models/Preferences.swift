@@ -117,6 +117,8 @@ struct UserPreferences: Codable, Equatable, Sendable {
     var protection = ProtectionRules()
     var transcriptionLocaleIdentifier = "it-IT"
     var lastScanCompletedAt: Date?
+    /// Versione dei criteri di scelta dello scatto migliore già applicata ai gruppi esistenti.
+    var shotRankingVersion = 0
     /// Solo per provare i piani durante lo sviluppo.
     var developerTier: PlanTier?
 
@@ -138,6 +140,7 @@ struct UserPreferences: Codable, Equatable, Sendable {
         protection = try container.decodeIfPresent(ProtectionRules.self, forKey: .protection) ?? ProtectionRules()
         transcriptionLocaleIdentifier = try container.decodeIfPresent(String.self, forKey: .transcriptionLocaleIdentifier) ?? "it-IT"
         lastScanCompletedAt = try container.decodeIfPresent(Date.self, forKey: .lastScanCompletedAt)
+        shotRankingVersion = try container.decodeIfPresent(Int.self, forKey: .shotRankingVersion) ?? 0
         developerTier = try container.decodeIfPresent(PlanTier.self, forKey: .developerTier)
     }
 

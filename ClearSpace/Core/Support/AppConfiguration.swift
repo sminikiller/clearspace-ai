@@ -7,6 +7,11 @@ enum AppConfiguration {
     /// Versione delle analisi: aumentandola, gli elementi vengono rianalizzati alla scansione successiva.
     static let analysisVersion = 1
 
+    /// Versione dei criteri con cui si sceglie lo scatto migliore nei gruppi di foto simili.
+    /// Aumentandola, alla prima apertura dopo l'aggiornamento parte da sola una scansione leggera
+    /// che ricalcola i suggerimenti dei gruppi già trovati.
+    static let shotRankingVersion = 1
+
     /// Finché è `false` tutte le funzioni sono sbloccate e StoreKit non viene interrogato.
     /// Va attivato solo dopo aver configurato i prodotti in App Store Connect.
     static let monetizationEnabled = false

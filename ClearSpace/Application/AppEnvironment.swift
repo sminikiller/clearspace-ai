@@ -255,8 +255,12 @@ final class AppEnvironment {
     func didBecomeActive() {
         photos.refreshAuthorization()
         guard isReady, !scan.isRunning else { return }
-        // Scansione leggera quando la libreria è cambiata o non è mai stata analizzata.
-        if photos.canRead && (scan.needsRescan || store.isEmpty) {
+        // Scansione leggera quando la libreria è cambiata o non è mai stata analizzata, e una volta
+        // dopo un aggiornamento che cambia i criteri di scelta dello scatto migliore: i gruppi già
+        // trovati ricevono così i nuovi suggerimenti senza che l'utente debba rilanciare l'analisi.
+        let rankingIsOutdated = !store.isEmpty
+            && preferences.values.shotRankingVersion != AppConfiguration.shotRankingVersion
+        if photos.canRead && (scan.needsRescan || store.isEmpty || rankingIsOutdated) {
             scan.start(deep: false)
         }
     }

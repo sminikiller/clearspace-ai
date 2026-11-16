@@ -206,6 +206,11 @@ final class ScanCoordinator {
                 activity = "Scelta dello scatto migliore"
                 guard await rankSimilarShots() else { return finish(cancelled: true) }
             }
+            // I gruppi esistenti sono allineati ai criteri correnti: non serve più la scansione
+            // automatica prevista dopo un aggiornamento dell'app.
+            if preferences.values.shotRankingVersion != AppConfiguration.shotRankingVersion {
+                preferences.update { $0.shotRankingVersion = AppConfiguration.shotRankingVersion }
+            }
         }
         setProgress(.previews, 1, 1)
 
