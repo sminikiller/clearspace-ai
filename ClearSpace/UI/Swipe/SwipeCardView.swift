@@ -96,7 +96,10 @@ struct SwipeCardView: View {
                 } else if group.kind.isDuplicateKind {
                     cardBadge("Ha \(group.memberIDs.count - 1) \(group.memberIDs.count == 2 ? "copia" : "copie")", "square.on.square")
                 } else {
-                    cardBadge("\(group.memberIDs.count) scatti simili", "square.stack.3d.down.right")
+                    cardBadge(
+                        "\(group.memberIDs.count) \(item.isVideo ? "video simili" : "scatti simili")",
+                        "square.stack.3d.down.right"
+                    )
                 }
             }
             if item.traits.contains(.livePhoto) {
