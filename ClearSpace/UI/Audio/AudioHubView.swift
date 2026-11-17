@@ -18,6 +18,7 @@ struct AudioHubView: View {
             }
         }
         .navigationTitle("Audio e registrazioni")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private var content: some View {

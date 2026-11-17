@@ -43,6 +43,7 @@ struct AppAssistantView: View {
             }
         }
         .navigationTitle("Assistente app")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private func link(for guide: AppGuide) -> some View {

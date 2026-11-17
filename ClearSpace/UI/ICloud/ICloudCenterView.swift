@@ -19,6 +19,7 @@ struct ICloudCenterView: View {
             quotaSection
         }
         .navigationTitle("Centro iCloud")
+        .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             if let quota = env.preferences.values.manualICloudQuota {
                 totalText = String(format: "%.0f", quota.totalGB)

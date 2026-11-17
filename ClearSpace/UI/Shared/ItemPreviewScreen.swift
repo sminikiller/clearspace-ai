@@ -76,6 +76,8 @@ struct ItemPreviewScreen: View {
                 handle(result)
             } label: {
                 Label("Da eliminare", systemImage: "trash")
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
@@ -86,6 +88,8 @@ struct ItemPreviewScreen: View {
                 dismiss()
             } label: {
                 Label("Conserva", systemImage: "checkmark")
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)

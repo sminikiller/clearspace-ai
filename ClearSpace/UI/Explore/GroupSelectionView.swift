@@ -114,6 +114,9 @@ struct GroupSelectionView: View {
             }
         }
         .background(Theme.background)
+        // Schermata di lavoro fitta: con il testo molto grande intestazione e barra si fermano a una
+        // dimensione che lascia vedere la griglia.
+        .compactControlText()
         .navigationTitle(isMasculine ? "Scegli i migliori" : "Scegli le migliori")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)

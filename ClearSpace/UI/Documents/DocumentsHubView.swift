@@ -17,6 +17,7 @@ struct DocumentsHubView: View {
             }
         }
         .navigationTitle("Documenti e file")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private var content: some View {

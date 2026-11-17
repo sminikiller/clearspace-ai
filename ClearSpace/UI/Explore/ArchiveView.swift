@@ -47,6 +47,7 @@ struct ArchiveView: View {
             }
         }
         .navigationTitle("Archivio storico")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -256,6 +257,7 @@ struct NostalgiaView: View {
         }
         .background(Theme.background)
         .navigationTitle("Modalità nostalgia")
+        .navigationBarTitleDisplayMode(.inline)
         .task(id: env.listRevision) {
             reload()
         }

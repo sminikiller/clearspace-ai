@@ -22,8 +22,10 @@ final class LayoutTests: UITestCase {
         homeScreens()
         analyzeScreens()
         exploreScreens()
-        swipeScreens()
+        // La galleria ha proposto le foto simili per l'eliminazione: la Revisione le mostra e poi le
+        // ripristina, così tornano da decidere e lo swipe le presenta con la striscia dei simili.
         reviewScreens()
+        swipeScreens()
         resultsScreens()
     }
 
@@ -258,6 +260,21 @@ final class LayoutTests: UITestCase {
             checkReachable(app.buttons["Proponi le selezionate per l'eliminazione"], "Galleria: «Elimina»")
             scroll(by: 0.45)
             checkLayout("L26b-galleria-scorsa")
+
+            // Tutte le foto del gruppo vanno in revisione: più avanti vengono ripristinate.
+            let selectAll = app.buttons["Seleziona tutte"]
+            bringIntoView(selectAll)
+            if selectAll.exists && selectAll.isHittable {
+                selectAll.tap()
+                let propose = app.buttons["Proponi le selezionate per l'eliminazione"]
+                if propose.exists && propose.isHittable {
+                    propose.tap()
+                    pause(1)
+                    checkLayout("L26c-galleria-proposte")
+                }
+            } else {
+                XCTFail("Galleria: «Seleziona tutte» non si raggiunge")
+            }
             let compare = app.buttons["Confronta"].firstMatch
             if compare.exists && compare.isHittable {
                 compare.tap()
@@ -281,60 +298,75 @@ final class LayoutTests: UITestCase {
 
     // MARK: - Swipe
 
+    /// Swipe sulle foto simili dalla pulizia guidata: carta, striscia con tutto il gruppo, pulsanti,
+    /// griglia del gruppo e dettagli, tutto con il testo grande.
     private func swipeScreens() {
-        app.tabBars.buttons["Esplora"].tap()
+        app.tabBars.buttons["Home"].tap()
         pause(1)
-        let videos = element(startingWith: "Video")
-        bringIntoView(videos)
-        guard videos.exists, videos.isHittable else {
-            XCTFail("Esplora: manca la sezione Video")
+        let guided = element(startingWith: "Pulizia guidata")
+        bringIntoView(guided)
+        guard guided.exists, guided.isHittable else {
+            XCTFail("Home: «Pulizia guidata» non si raggiunge")
             return
         }
-        videos.tap()
-        pause(1)
-        let allVideos = element(startingWith: "Tutti i video")
-        guard allVideos.waitForExistence(timeout: 10) else {
+        guided.tap()
+        guard app.navigationBars["Pulizia guidata"].waitForExistence(timeout: 10) else {
+            XCTFail("La pulizia guidata non si è aperta")
+            return
+        }
+        let swipe = app.buttons
+            .matching(NSPredicate(format: "label == %@ AND enabled == true", "Rivedi con gli swipe"))
+            .firstMatch
+        guard swipe.waitForExistence(timeout: 20) else {
+            checkLayout("L41-guidata-senza-simili")
+            XCTFail("La pulizia guidata non propone le foto simili da rivedere")
             goBack()
             return
         }
-        allVideos.tap()
-        let swipe = app.buttons["Rivedi con gli swipe"]
-        guard swipe.waitForExistence(timeout: 20), swipe.isHittable else {
-            XCTFail("Video: «Rivedi con gli swipe» non si raggiunge")
-            goBack()
-            goBack()
-            return
-        }
+        bringIntoView(swipe)
         swipe.tap()
         guard app.buttons["Conserva"].waitForExistence(timeout: 20) else {
             XCTFail("La modalità swipe non si è aperta")
             return
         }
         pause(2.5)
-        checkLayout("L41-swipe-video")
-        for label in ["Elimina", "Più tardi", "Dettagli", "Conserva"] {
+        checkLayout("L41-swipe-foto-simili")
+        for label in ["Elimina", "Più tardi", "Dettagli", "Conserva", "Griglia", "Confronta"] {
             checkReachable(app.buttons[label], "Swipe: «\(label)»")
+        }
+        let keepBest = element(startingWith: "Tieni la")
+        if keepBest.exists {
+            XCTAssertTrue(isFullyOnScreen(keepBest), "Swipe: «\(keepBest.label)» esce dallo schermo")
         }
 
         let grid = app.buttons["Griglia"]
         if grid.exists && grid.isHittable {
             grid.tap()
             pause(1.5)
-            checkLayout("L42-swipe-griglia-video")
+            checkLayout("L42-swipe-griglia")
+            closeTopScreen()
+        }
+        let compare = app.buttons["Confronta"]
+        if compare.exists && compare.isHittable {
+            compare.tap()
+            pause(2)
+            checkLayout("L43-swipe-confronto")
             closeTopScreen()
         }
         let details = app.buttons["Dettagli"]
         if details.exists && details.isHittable {
             details.tap()
             pause(1.2)
-            checkLayout("L43-dettagli")
+            checkLayout("L44-dettagli")
             scroll(by: 0.45)
-            checkLayout("L44-dettagli-2")
+            checkLayout("L44b-dettagli-2")
             closeTopScreen()
         }
-        app.buttons["Chiudi"].firstMatch.tap()
-        pause(1)
-        goBack()
+        let close = app.buttons["Chiudi"].firstMatch
+        if close.exists {
+            close.tap()
+            pause(1)
+        }
         goBack()
     }
 
@@ -361,8 +393,17 @@ final class LayoutTests: UITestCase {
         checkLayout("L52-conferma-2")
         scroll(by: 0.45)
         checkLayout("L53-conferma-3")
-        // Nulla viene eliminato: si chiude la conferma.
+        // Nulla viene eliminato: si chiude la conferma e si ripristina tutto.
         closeTopScreen()
+        let restore = app.buttons["Ripristina gruppo"].firstMatch
+        bringIntoView(restore)
+        if restore.exists && restore.isHittable {
+            restore.tap()
+            pause(1.5)
+            checkLayout("L54-revisione-ripristinata")
+        } else {
+            XCTFail("Revisione: «Ripristina gruppo» non si raggiunge")
+        }
     }
 
     // MARK: - Risultati

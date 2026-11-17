@@ -126,6 +126,7 @@ struct GuidedCleanupView: View {
             }
         }
         .navigationTitle("Pulizia guidata")
+        .navigationBarTitleDisplayMode(.inline)
         .task(id: env.listRevision) {
             await reloadCounts()
         }

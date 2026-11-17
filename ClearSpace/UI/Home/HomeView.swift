@@ -45,11 +45,11 @@ struct HomeView: View {
             }
             .sheet(isPresented: $showsQuickOptions) {
                 QuickCleanupSheet()
-                    .presentationDetents([.medium])
+                    .presentationDetents([.medium, .large])
             }
             .sheet(isPresented: $showsGoalOptions) {
                 GoalCleanupSheet()
-                    .presentationDetents([.medium])
+                    .presentationDetents([.medium, .large])
             }
             .task(id: env.store.revision) {
                 device = DeviceStorage.snapshot()

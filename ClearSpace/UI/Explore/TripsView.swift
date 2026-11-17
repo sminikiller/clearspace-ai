@@ -18,9 +18,9 @@ struct TripsView: View {
                 ProgressView("Ricerca dei viaggi…")
             } else if trips.isEmpty {
                 ContentUnavailableView(
-                    "Nessun viaggio riconosciuto",
+                    "Nessun viaggio",
                     systemImage: "airplane",
-                    description: Text("Servono foto con la posizione, scattate lontano dal luogo abituale.")
+                    description: Text("Non sono stati riconosciuti viaggi: servono foto con la posizione, scattate lontano dal luogo abituale.")
                 )
             }
             ForEach(trips) { trip in
@@ -51,6 +51,7 @@ struct TripsView: View {
             }
         }
         .navigationTitle("Modalità viaggio")
+        .navigationBarTitleDisplayMode(.inline)
         .task {
             await reload()
         }

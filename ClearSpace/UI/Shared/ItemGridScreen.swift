@@ -46,6 +46,7 @@ struct ItemGridScreen: View {
     var limit: Int?
 
     @Environment(AppEnvironment.self) private var env
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var items: [IndexedItem] = []
     @State private var protectedIDs = Set<UUID>()
     @State private var totalBytes: Int64 = 0
@@ -163,10 +164,18 @@ struct ItemGridScreen: View {
             }
         }
         ToolbarItem(placement: .primaryAction) {
-            Button(isSelecting ? "Fine" : "Seleziona") {
+            Button {
                 isSelecting.toggle()
                 if !isSelecting {
                     selection.removeAll()
+                }
+            } label: {
+                // Con il testo molto grande solo l'icona: la scritta toglierebbe spazio al titolo.
+                if dynamicTypeSize.isAccessibilitySize {
+                    Label(isSelecting ? "Fine" : "Seleziona", systemImage: isSelecting ? "checkmark" : "checkmark.circle")
+                        .labelStyle(.iconOnly)
+                } else {
+                    Text(isSelecting ? "Fine" : "Seleziona")
                 }
             }
             .disabled(items.isEmpty)
