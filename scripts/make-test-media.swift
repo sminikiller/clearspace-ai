@@ -147,8 +147,9 @@ if let dark = darkened(shifted, exposure: -1.6, using: ciContext) {
 
 // MARK: - Video
 
-/// Video di quattro secondi con una barra che si sposta: basta a provare riproduzione e fotogrammi.
-func writeVideo(to directory: URL, name: String) async throws {
+/// Video di quattro secondi con un riquadro che si sposta: basta a provare riproduzione e fotogrammi.
+/// `variation` cambia appena i colori: due riprese quasi uguali devono risultare "video simili".
+func writeVideo(to directory: URL, name: String, variation: CGFloat) async throws {
     let url = directory.appendingPathComponent(name)
     try? FileManager.default.removeItem(at: url)
     let width = 640
@@ -198,9 +199,11 @@ func writeVideo(to directory: URL, name: String) async throws {
             bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue
         ) {
             let progress = CGFloat(frame) / CGFloat(frameCount)
-            context.setFillColor(CGColor(red: 0.10, green: 0.20 + 0.5 * progress, blue: 0.55, alpha: 1))
+            context.setFillColor(
+                CGColor(red: 0.10 + variation, green: 0.20 + 0.5 * progress, blue: 0.55 - variation, alpha: 1)
+            )
             context.fill(CGRect(x: 0, y: 0, width: width, height: height))
-            context.setFillColor(CGColor(red: 1, green: 0.85, blue: 0.2, alpha: 1))
+            context.setFillColor(CGColor(red: 1, green: 0.85 - variation, blue: 0.2, alpha: 1))
             context.fill(CGRect(x: progress * CGFloat(width - 120), y: 120, width: 120, height: 120))
         }
         CVPixelBufferUnlockBaseAddress(buffer, [])
@@ -216,9 +219,12 @@ func writeVideo(to directory: URL, name: String) async throws {
     print("Creato \(name)")
 }
 
-do {
-    try await writeVideo(to: outputDirectory, name: "video-di-prova.mp4")
-} catch {
-    // Il video è un di più: senza, le prove sulle foto restano valide.
-    print("Video non creato: \(error)")
+// Due riprese quasi uguali: l'app deve mostrarle insieme e lasciarle guardare e decidere una per una.
+for (name, variation) in [("video-di-prova-1.mp4", CGFloat(0)), ("video-di-prova-2.mp4", CGFloat(0.04))] {
+    do {
+        try await writeVideo(to: outputDirectory, name: name, variation: variation)
+    } catch {
+        // I video sono un di più: senza, le prove sulle foto restano valide.
+        print("Video non creato (\(name)): \(error)")
+    }
 }

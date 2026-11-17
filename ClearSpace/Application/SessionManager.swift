@@ -147,9 +147,23 @@ final class SessionManager {
     /// e quelli già decisi altrove, ad esempio con una scelta su un intero gruppo di foto simili.
     private func skipSettledItems(at index: Int) {
         while let id = sessions[index].currentItemID {
-            if let item = store.item(id), item.isPendingReview { break }
+            if let item = store.item(id) {
+                if item.isPendingReview { break }
+                // Un elemento portato in primo piano dall'utente resta sulla carta anche se è già
+                // stato deciso: lo sta riguardando, magari per cambiare idea.
+                if sessions[index].focusedItemID == id { break }
+            }
             sessions[index].skipCurrent()
         }
+    }
+
+    /// Porta sulla carta un elemento scelto dall'utente, ad esempio uno degli scatti o dei video
+    /// simili mostrati sotto: lo si può guardare e decidere come qualsiasi altro, anche se era già
+    /// stato deciso o non faceva parte della coda.
+    func focus(on itemID: UUID) {
+        guard let index = activeIndex, store.item(itemID) != nil else { return }
+        sessions[index].bringToFront(itemID)
+        scheduleSave()
     }
 
     /// Salta gli elementi della sessione attiva che nel frattempo non sono più disponibili

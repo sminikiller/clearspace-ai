@@ -215,10 +215,17 @@ private final class PlayerContainerView: UIView {
 /// spostarsi, i fotogrammi in basso mostrano i momenti principali.
 struct InlineVideoView: View {
     let item: IndexedItem
+    /// Avvia la riproduzione anche se quella automatica è disattivata: serve quando il video è stato
+    /// scelto apposta per guardarlo.
+    var forcesAutoplay = false
+    /// Un'altra schermata copre il video (dettagli, confronto, schermo intero): la riproduzione si
+    /// ferma e riprende quando si torna, così non suonano due video insieme.
+    var isSuspended = false
 
     @Environment(AppEnvironment.self) private var env
     @State private var controller = InlineVideoController()
     @State private var forcesNetwork = false
+    @State private var pausedBySuspension = false
 
     private struct LoadKey: Equatable {
         let id: UUID
@@ -256,8 +263,17 @@ struct InlineVideoView: View {
                 item: item,
                 provider: env.thumbnails,
                 allowNetwork: allowNetwork,
-                autoplay: env.preferences.values.autoplayVideos || forcesNetwork
+                autoplay: env.preferences.values.autoplayVideos || forcesNetwork || forcesAutoplay
             )
+        }
+        .onChange(of: isSuspended) { _, suspended in
+            if suspended {
+                pausedBySuspension = controller.isPlaying
+                controller.pause()
+            } else if pausedBySuspension {
+                pausedBySuspension = false
+                controller.play()
+            }
         }
         .onDisappear {
             controller.teardown()

@@ -154,6 +154,7 @@ Quando una foto ha degli scatti simili, l'app li mostra tutti: nella modalità s
 - **Confronto corretto.** Un criterio viene usato solo se è disponibile per tutti gli scatti del gruppo: non si paragonano numeri calcolati in modo diverso. Preferiti e foto modificate prevalgono sempre, perché sono scelte già fatte dall'utente.
 - **Spiegazione.** Il consiglio arriva con il motivo («ha gli occhi aperti e il soggetto più a fuoco») e ogni scatto ha un voto da 0 a 100. Nel confronto lo zoom è condiviso: ingrandito un punto, si passa da una foto all'altra restando lì.
 - **Scelta.** «Tieni solo la migliore», «Tieni solo questa» oppure «Tieni tutte». Gli scatti scartati passano alla Revisione come ogni altra scelta, e la mossa si annulla con un solo gesto.
+- **Uno per uno.** Vale per le foto e per i video simili: un tocco su un'anteprima della striscia porta quell'elemento sulla carta, dove lo si guarda (un video parte subito) e lo si decide con i soliti gesti. Si può tornare anche su un elemento già deciso e cambiare idea. Tenendo premuta un'anteprima lo si conserva o scarta senza spostarsi.
 
 ### Anteprime nitide e video
 

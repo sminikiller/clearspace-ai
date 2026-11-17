@@ -123,10 +123,13 @@ struct SwipeSessionView: View {
                             group: group,
                             members: env.store.members(of: group),
                             currentID: item.id,
-                            onCompare: { memberID in
-                                comparison = ComparisonTarget(groupID: group.id, itemID: memberID)
+                            onSelect: { memberID in select(memberID) },
+                            onCompare: {
+                                comparison = ComparisonTarget(groupID: group.id, itemID: item.id)
                             },
-                            onKeepBest: { keepBest(of: group) }
+                            onKeepBest: { keepBest(of: group) },
+                            onKeepOnlyCurrent: { keepOnly(item, in: group) },
+                            onDecide: { memberID, choice in decideMember(memberID, choice) }
                         )
                     }
                     SwipeActionBar(
@@ -169,7 +172,15 @@ struct SwipeSessionView: View {
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
-            SwipeCardView(item: item, isInteractive: true, group: group, onExpand: { previewItem = item })
+            SwipeCardView(
+                item: item,
+                isInteractive: true,
+                group: group,
+                // Un video scelto dalla striscia parte subito: è stato toccato proprio per guardarlo.
+                autoplaysVideo: sessions.active?.focusedItemID == item.id,
+                isSuspended: comparison != nil || previewItem != nil || detailItem != nil,
+                onExpand: { previewItem = item }
+            )
                 .overlay {
                     SwipeStampOverlay(offset: offset)
                 }
@@ -274,18 +285,51 @@ struct SwipeSessionView: View {
             : "Scelta sul gruppo annullata: \(undone) elementi ripristinati."
     }
 
+    /// Porta sulla carta un elemento del gruppo toccato nella striscia: lo si guarda e lo si decide
+    /// come qualsiasi altro. Un video parte subito.
+    private func select(_ memberID: UUID) {
+        guard !isCommitting else { return }
+        offset = .zero
+        sessions.focus(on: memberID)
+        feedbackTrigger += 1
+    }
+
     /// Conserva lo scatto consigliato del gruppo e propone gli altri per l'eliminazione, in un solo gesto.
     /// Come ogni scelta, passa dalla revisione: nulla viene eliminato qui.
     private func keepBest(of group: ItemGroup) {
         guard let keepID = group.suggestedKeepID else { return }
+        keepOnly(keepID, in: group, summary: "Tenuto l'elemento consigliato")
+    }
+
+    /// Conserva l'elemento sulla carta e propone tutti gli altri del gruppo per l'eliminazione.
+    private func keepOnly(_ item: IndexedItem, in group: ItemGroup) {
+        keepOnly(item.id, in: group, summary: "Tenuto quello sulla carta")
+    }
+
+    private func keepOnly(_ keepID: UUID, in group: ItemGroup, summary: String) {
         let others = group.memberIDs.filter { $0 != keepID }
         let result = sessions.decideGroup(keep: [keepID], delete: others)
         markTrigger += 1
-        var message = "Tenuta la migliore: \(Format.plural(result.applied, "scatto aggiunto", "scatti aggiunti")) alla revisione."
+        var message = "\(summary): \(Format.plural(result.applied, "altro aggiunto", "altri aggiunti")) alla revisione."
         if result.blocked > 0 {
             message += " \(Format.plural(result.blocked, "protetto saltato", "protetti saltati"))."
         }
         toast = message
+    }
+
+    /// Decide un singolo elemento del gruppo dal menu della striscia, senza portarlo sulla carta.
+    private func decideMember(_ memberID: UUID, _ choice: SwipeChoice) {
+        if choice == .delete {
+            let result = sessions.decideGroup(keep: [], delete: [memberID])
+            if result.blocked > 0 {
+                toast = "Elemento protetto: non può essere proposto per l'eliminazione."
+            } else {
+                markTrigger += 1
+            }
+        } else {
+            sessions.decideGroup(keep: [memberID], delete: [])
+            feedbackTrigger += 1
+        }
     }
 
     private func openReview() {
@@ -452,7 +496,7 @@ private struct SessionSummaryView: View {
                     .accessibilityHidden(true)
                 Text("Sessione completata")
                     .font(.title2.bold())
-                Text("Hai esaminato \(Format.plural(session.decisions.count, "elemento", "elementi")). Nulla è stato eliminato: controlla la lista nella scheda Revisione e conferma quando vuoi.")
+                Text("Hai esaminato \(Format.plural(session.examinedCount, "elemento", "elementi")). Nulla è stato eliminato: controlla la lista nella scheda Revisione e conferma quando vuoi.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

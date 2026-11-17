@@ -285,7 +285,9 @@ struct GroupComparisonView: View {
                         TagChip(text: highlight.text, tint: tint(for: highlight.kind))
                     }
                 }
-                if item.pixelCount > 0 {
+                if item.isVideo, item.pixelWidth > 0 {
+                    TagChip(text: "\(item.pixelWidth) × \(item.pixelHeight)")
+                } else if item.pixelCount > 0 {
                     TagChip(text: "\(Format.decimal(Double(item.pixelCount) / 1_000_000, maximumFractionDigits: 1)) MP")
                 }
                 if item.duration > 0 {
@@ -314,21 +316,24 @@ struct GroupComparisonView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         } else {
-            Picker("Decisione per questa foto", selection: decisionBinding(for: member)) {
-                Text("Tieni questa").tag(false)
-                Text("Elimina questa").tag(true)
+            // "questo" per video e file, "questa" per le foto.
+            let masculine = !member.isImage
+            Picker("Decisione per l'elemento selezionato", selection: decisionBinding(for: member)) {
+                Text(masculine ? "Tieni questo" : "Tieni questa").tag(false)
+                Text(masculine ? "Elimina questo" : "Elimina questa").tag(true)
             }
             .pickerStyle(.segmented)
         }
     }
 
     private func actions(group: ItemGroup, members: [IndexedItem], selected: IndexedItem) -> some View {
-        VStack(spacing: 8) {
+        let masculine = !selected.isImage
+        return VStack(spacing: 8) {
             if let keepID = group.suggestedKeepID {
                 Button {
                     keepOnly(keepID, in: group)
                 } label: {
-                    Text("Tieni solo la migliore")
+                    Text(masculine ? "Tieni solo il migliore" : "Tieni solo la migliore")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -339,7 +344,7 @@ struct GroupComparisonView: View {
                     Button {
                         keepOnly(selected.id, in: group)
                     } label: {
-                        Text("Tieni solo questa")
+                        Text(masculine ? "Tieni solo questo" : "Tieni solo questa")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
@@ -347,7 +352,7 @@ struct GroupComparisonView: View {
                 Button {
                     keepAll(members)
                 } label: {
-                    Text("Tieni tutte")
+                    Text(masculine ? "Tieni tutti" : "Tieni tutte")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
@@ -419,22 +424,30 @@ struct CompareViewer: View {
 
     var body: some View {
         GeometryReader { geometry in
-            Group {
-                if item.isImage {
-                    ItemImageView(item: item, pixelSide: 3_000, zoom: viewport.scale, pan: viewport.offset)
-                } else {
-                    ItemThumbnailView(item: item, pointSide: 430, fill: false, allowsNetwork: true)
-                        .scaleEffect(viewport.scale)
-                        .offset(viewport.offset)
+            if item.isVideo {
+                // I video si guardano, non si ingrandiscono: partono appena selezionati, con gli stessi
+                // comandi della carta (pausa, barra, velocità, audio).
+                InlineVideoView(item: item, forcesAutoplay: true)
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .background(Color.black)
+            } else {
+                Group {
+                    if item.isImage {
+                        ItemImageView(item: item, pixelSide: 3_000, zoom: viewport.scale, pan: viewport.offset)
+                    } else {
+                        ItemThumbnailView(item: item, pointSide: 430, fill: false, allowsNetwork: true)
+                            .scaleEffect(viewport.scale)
+                            .offset(viewport.offset)
+                    }
                 }
-            }
-            .frame(width: geometry.size.width, height: geometry.size.height)
-            .background(Color.black)
-            .contentShape(Rectangle())
-            .gesture(magnifyGesture(in: geometry.size))
-            .simultaneousGesture(dragGesture(in: geometry.size))
-            .onTapGesture(count: 2) {
-                toggleZoom()
+                .frame(width: geometry.size.width, height: geometry.size.height)
+                .background(Color.black)
+                .contentShape(Rectangle())
+                .gesture(magnifyGesture(in: geometry.size))
+                .simultaneousGesture(dragGesture(in: geometry.size))
+                .onTapGesture(count: 2) {
+                    toggleZoom()
+                }
             }
         }
         .clipped()

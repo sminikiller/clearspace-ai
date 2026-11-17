@@ -73,10 +73,12 @@ jobs:
           if [ "$PHOTOS" -ge 3 ] && xcrun simctl addmedia "$DEVICE_ID" "$RUNNER_TEMP"/media/*.jpg; then
             echo "Foto simili aggiunte al simulatore: $PHOTOS"
             echo "TEST_RUNNER_SEEDED_MEDIA=1" >> "$GITHUB_ENV"
-            if ls "$RUNNER_TEMP"/media/*.mp4 > /dev/null 2>&1 \
-              && xcrun simctl addmedia "$DEVICE_ID" "$RUNNER_TEMP"/media/*.mp4; then
-              echo "Video di prova aggiunto al simulatore"
+            VIDEOS=$(ls "$RUNNER_TEMP"/media/*.mp4 2>/dev/null | wc -l | tr -d ' ')
+            if [ "$VIDEOS" -ge 1 ] && xcrun simctl addmedia "$DEVICE_ID" "$RUNNER_TEMP"/media/*.mp4; then
+              echo "Video di prova aggiunti al simulatore: $VIDEOS"
               echo "TEST_RUNNER_SEEDED_VIDEO=1" >> "$GITHUB_ENV"
+              # Con due riprese quasi uguali si prova anche il gruppo di video simili.
+              if [ "$VIDEOS" -ge 2 ]; then echo "TEST_RUNNER_SEEDED_VIDEO_PAIR=1" >> "$GITHUB_ENV"; fi
             else
               echo "Video di prova non disponibile: la prova sul video verrà saltata"
             fi

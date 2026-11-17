@@ -11,6 +11,10 @@ struct SwipeCardView: View {
     var isInteractive = true
     /// Gruppo di simili o duplicati a cui appartiene l'elemento, se esiste.
     var group: ItemGroup?
+    /// Avvia il video anche se la riproduzione automatica è disattivata nelle impostazioni.
+    var autoplaysVideo = false
+    /// Un'altra schermata copre la carta: il video si ferma finché non si torna.
+    var isSuspended = false
     var onExpand: () -> Void = {}
 
     @State private var zoom: CGFloat = 1
@@ -60,7 +64,7 @@ struct SwipeCardView: View {
             // La carta in attesa sotto quella corrente mostra solo la miniatura.
             ItemThumbnailView(item: item, pointSide: 430, fill: false, allowsNetwork: true)
         } else if item.isVideo {
-            InlineVideoView(item: item)
+            InlineVideoView(item: item, forcesAutoplay: autoplaysVideo, isSuspended: isSuspended)
         } else {
             ItemImageView(item: item, pixelSide: 2_048, zoom: zoom, zoomAnchor: zoomAnchor)
                 .contentShape(Rectangle())

@@ -269,14 +269,74 @@ final class SmokeTests: XCTestCase {
         pause(1.5)
         capture("47-video-in-pausa")
 
-        keep.tap()
-        XCTAssertTrue(
-            element(containing: "Sessione completata").waitForExistence(timeout: 10),
-            "La sessione non si è conclusa dopo l'ultimo elemento"
-        )
-        capture("48-sessione-completata")
+        // Video simili: gli altri si devono poter guardare e scegliere, non solo il primo
+        if environment["SEEDED_VIDEO_PAIR"] == "1" {
+            reviewSimilarVideosInSwipe()
+        }
+
+        // Si conserva tutto ciò che resta, per lasciare la libreria com'era
+        let summary = element(containing: "Sessione completata")
+        var taps = 0
+        while !summary.exists && keep.exists && taps < 6 {
+            keep.tap()
+            taps += 1
+            pause(1.2)
+        }
+        XCTAssertTrue(summary.waitForExistence(timeout: 10), "La sessione non si è conclusa dopo l'ultimo elemento")
+        capture("51-sessione-completata")
         app.buttons["Chiudi"].firstMatch.tap()
         pause(1)
+    }
+
+    /// Due riprese quasi uguali compaiono insieme sotto la carta. Toccando quella non in primo piano
+    /// deve passare sulla carta e partire; poi la si sceglie con "Tieni solo questo" e si annulla.
+    private func reviewSimilarVideosInSwipe() {
+        let firstIsCurrent = element(startingWith: "Video 1 del gruppo, sulla carta").waitForExistence(timeout: 15)
+        let otherPrefix = firstIsCurrent ? "Video 2 del gruppo" : "Video 1 del gruppo"
+        let other = element(startingWith: otherPrefix)
+        guard other.waitForExistence(timeout: 5) else {
+            capture("48-video-senza-striscia")
+            XCTFail("I due video di prova non compaiono come video simili sotto la carta")
+            return
+        }
+        capture("48-video-simili")
+
+        // Un tocco sull'altro video: passa sulla carta e parte
+        other.tap()
+        XCTAssertTrue(
+            element(startingWith: otherPrefix + ", sulla carta").waitForExistence(timeout: 6),
+            "Il video toccato nella striscia non è passato sulla carta"
+        )
+        pause(3)
+        capture("49-altro-video-sulla-carta")
+
+        // Lo si sceglie: resta questo, l'altro va in revisione
+        let keepThis = app.buttons["Tieni solo questo"]
+        guard keepThis.waitForExistence(timeout: 5) else {
+            XCTFail("Manca il pulsante per tenere solo il video sulla carta")
+            return
+        }
+        keepThis.tap()
+        XCTAssertTrue(
+            element(containing: "Sessione completata").waitForExistence(timeout: 10),
+            "La scelta sul video non ha concluso la sessione"
+        )
+        pause(1)
+        capture("50-video-scelto")
+
+        // Si annulla: entrambi tornano da decidere
+        let undo = app.buttons["Annulla l'ultima scelta"]
+        if undo.waitForExistence(timeout: 5) {
+            bringIntoView(undo)
+            undo.tap()
+            XCTAssertTrue(
+                app.buttons["Conserva"].waitForExistence(timeout: 10),
+                "L'annullamento non ha riportato i video nella sessione"
+            )
+            pause(1)
+        } else {
+            XCTFail("Manca il pulsante per annullare la scelta sui video")
+        }
     }
 
     /// Dalla pulizia guidata avvia lo swipe sulle foto simili: controlla la striscia con tutti gli
@@ -320,6 +380,20 @@ final class SmokeTests: XCTestCase {
         }
         pause(2)
         capture("36-swipe-con-simili")
+
+        // Un tocco su un'anteprima della striscia porta quello scatto sulla carta
+        let firstShot = element(startingWith: "Foto 1 del gruppo")
+        if firstShot.waitForExistence(timeout: 5) {
+            firstShot.tap()
+            XCTAssertTrue(
+                element(startingWith: "Foto 1 del gruppo, sulla carta").waitForExistence(timeout: 6),
+                "Lo scatto toccato nella striscia non è passato sulla carta"
+            )
+            pause(2)
+            capture("36b-scatto-scelto-dalla-striscia")
+        } else {
+            XCTFail("Nella striscia mancano le anteprime degli scatti simili")
+        }
 
         // Un tocco decide l'intero gruppo: resta la migliore, le altre vanno in revisione
         keepBest.tap()

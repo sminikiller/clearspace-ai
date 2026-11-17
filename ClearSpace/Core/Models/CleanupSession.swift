@@ -136,6 +136,10 @@ struct CleanupSession: Identifiable, Codable, Hashable, Sendable {
     var createdAt: Date
     var updatedAt: Date
     var isCompleted: Bool
+    /// Elemento che l'utente ha portato in primo piano, ad esempio toccando uno dei video simili
+    /// mostrati sotto la carta. Resta visibile anche se è già stato deciso, finché non si prende
+    /// una nuova decisione: serve a riguardarlo e, se si vuole, a cambiare idea.
+    var focusedItemID: UUID?
 
     init(
         id: UUID = UUID(),
@@ -175,17 +179,31 @@ struct CleanupSession: Identifiable, Codable, Hashable, Sendable {
         return min(1, Double(cursor) / Double(queue.count))
     }
 
+    /// Decisione in vigore per ciascun elemento, in ordine di tempo. Un elemento riconsiderato
+    /// (prima scartato, poi tenuto) conta una volta sola, con l'ultima scelta.
+    var standingDecisions: [SwipeDecision] {
+        var seen = Set<UUID>()
+        var latestFirst: [SwipeDecision] = []
+        for decision in decisions.reversed() where seen.insert(decision.itemID).inserted {
+            latestFirst.append(decision)
+        }
+        return Array(latestFirst.reversed())
+    }
+
+    /// Elementi su cui è stata presa una decisione in questa sessione.
+    var examinedCount: Int { standingDecisions.count }
+
     var keptCount: Int { count(of: .keep) }
     var markedCount: Int { count(of: .delete) }
     var postponedCount: Int { count(of: .postpone) }
 
     /// Spazio potenziale degli elementi proposti per l'eliminazione in questa sessione.
     var markedBytes: Int64 {
-        decisions.reduce(0) { $0 + ($1.choice == .delete ? $1.bytes : 0) }
+        standingDecisions.reduce(0) { $0 + ($1.choice == .delete ? $1.bytes : 0) }
     }
 
     var postponedIDs: [UUID] {
-        decisions.filter { $0.choice == .postpone }.map { $0.itemID }
+        standingDecisions.filter { $0.choice == .postpone }.map { $0.itemID }
     }
 
     var goalProgress: Double? {
@@ -199,7 +217,7 @@ struct CleanupSession: Identifiable, Codable, Hashable, Sendable {
     }
 
     private func count(of choice: SwipeChoice) -> Int {
-        decisions.reduce(0) { $0 + ($1.choice == choice ? 1 : 0) }
+        standingDecisions.reduce(0) { $0 + ($1.choice == choice ? 1 : 0) }
     }
 
     /// Registra la decisione sull'elemento corrente e passa al successivo.
@@ -209,7 +227,25 @@ struct CleanupSession: Identifiable, Codable, Hashable, Sendable {
             SwipeDecision(itemID: itemID, choice: choice, previousStatus: previousStatus, bytes: bytes, date: date)
         )
         cursor += 1
+        focusedItemID = nil
         updatedAt = date
+    }
+
+    /// Porta in primo piano un elemento scelto dall'utente: diventa quello corrente, pronto per essere
+    /// guardato e deciso. Se è più avanti nella coda viene anticipato; se non c'è, o è già stato
+    /// superato, viene inserito nella posizione corrente (le posizioni passate restano dove sono,
+    /// perché servono all'annullamento).
+    mutating func bringToFront(_ itemID: UUID, at date: Date = Date()) {
+        focusedItemID = itemID
+        isCompleted = false
+        updatedAt = date
+        guard currentItemID != itemID else { return }
+        let position = min(cursor, queue.count)
+        if let ahead = queue[position...].firstIndex(of: itemID) {
+            queue.remove(at: ahead)
+        }
+        queue.insert(itemID, at: position)
+        cursor = position
     }
 
     /// Salta l'elemento corrente senza registrare decisioni (es. file non più disponibile).
@@ -228,6 +264,7 @@ struct CleanupSession: Identifiable, Codable, Hashable, Sendable {
         } else {
             cursor = max(0, cursor - 1)
         }
+        focusedItemID = nil
         isCompleted = false
         updatedAt = date
         return last
@@ -250,6 +287,8 @@ struct CleanupSession: Identifiable, Codable, Hashable, Sendable {
                 )
             )
         }
+        // Dopo una scelta sull'intero gruppo si prosegue: l'elemento in primo piano non va trattenuto.
+        focusedItemID = nil
         updatedAt = date
     }
 
@@ -272,6 +311,7 @@ struct CleanupSession: Identifiable, Codable, Hashable, Sendable {
         if let earliest = passed.min() {
             cursor = earliest
         }
+        focusedItemID = nil
         isCompleted = false
         updatedAt = date
         return undone

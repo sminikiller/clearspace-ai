@@ -158,6 +158,57 @@ final class ShotQualityTests: XCTestCase {
         XCTAssertTrue(session.decisions.isEmpty)
     }
 
+    // MARK: - Elementi scelti dalla striscia
+
+    func testBringingAnItemToFrontMakesItCurrentWithoutLosingTheOthers() {
+        let ids = (0..<4).map { _ in UUID() }
+        var session = CleanupSession(title: "Prova", mode: .quick, queue: ids, now: TestData.now)
+        session.record(.keep, previousStatus: .unreviewed, bytes: 1)
+
+        // Si tocca il quarto nella striscia: passa davanti, gli altri restano in coda dietro di lui.
+        session.bringToFront(ids[3])
+        XCTAssertEqual(session.currentItemID, ids[3])
+        XCTAssertEqual(session.focusedItemID, ids[3])
+        XCTAssertEqual(session.queue, [ids[0], ids[3], ids[1], ids[2]])
+
+        session.record(.delete, previousStatus: .unreviewed, bytes: 7)
+        XCTAssertNil(session.focusedItemID)
+        XCTAssertEqual(session.currentItemID, ids[1])
+    }
+
+    func testAnItemAlreadyDecidedCanBeReconsideredAndCountsOnce() {
+        let ids = (0..<3).map { _ in UUID() }
+        var session = CleanupSession(title: "Prova", mode: .quick, queue: ids, now: TestData.now)
+        session.record(.delete, previousStatus: .unreviewed, bytes: 50)
+
+        // Lo si riguarda e si cambia idea: da scartato a conservato.
+        session.bringToFront(ids[0])
+        XCTAssertEqual(session.currentItemID, ids[0])
+        session.record(.keep, previousStatus: .markedForDeletion, bytes: 50)
+
+        XCTAssertEqual(session.markedCount, 0)
+        XCTAssertEqual(session.keptCount, 1)
+        XCTAssertEqual(session.markedBytes, 0)
+        XCTAssertEqual(session.examinedCount, 1)
+        XCTAssertEqual(session.currentItemID, ids[1])
+
+        // Annullando torna in vigore la scelta precedente.
+        let undone = session.undoLastMove()
+        XCTAssertEqual(undone.first?.previousStatus, .markedForDeletion)
+        XCTAssertEqual(session.markedCount, 1)
+        XCTAssertEqual(session.keptCount, 0)
+    }
+
+    func testBringingTheCurrentItemToFrontOnlyPinsIt() {
+        let ids = (0..<2).map { _ in UUID() }
+        var session = CleanupSession(title: "Prova", mode: .quick, queue: ids, now: TestData.now)
+
+        session.bringToFront(ids[0])
+        XCTAssertEqual(session.queue, ids)
+        XCTAssertEqual(session.cursor, 0)
+        XCTAssertEqual(session.focusedItemID, ids[0])
+    }
+
     func testDecisionsSavedBeforeGroupMovesStillDecode() throws {
         let json = """
         {"itemID":"\(UUID().uuidString)","choice":"keep","previousStatus":"unreviewed","bytes":5,"date":0}
