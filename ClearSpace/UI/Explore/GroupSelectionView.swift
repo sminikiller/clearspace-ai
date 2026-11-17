@@ -204,7 +204,7 @@ struct GroupSelectionView: View {
                     Text(order.title).tag(order)
                 }
             }
-            .pickerStyle(.segmented)
+            .adaptiveSegmentedStyle()
             quickSelection(group: group, members: members)
         }
         .padding(.top, 8)
@@ -250,26 +250,25 @@ struct GroupSelectionView: View {
         let keepers = GroupChoice.preferredKeepers(members: members, suggestedID: group.suggestedKeepID)
         let hasStars = members.contains { $0.isStarred }
         let all = Set(members.map { $0.id })
-        return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                quickButton(isMasculine ? "Seleziona tutti" : "Seleziona tutte") {
-                    selection = all
-                }
-                if !keepers.isEmpty && keepers.count < members.count {
-                    quickButton(hasStars
-                                ? (isMasculine ? "Tutti tranne i tuoi migliori" : "Tutte tranne le tue migliori")
-                                : (isMasculine ? "Tutti tranne il consigliato" : "Tutte tranne la consigliata")) {
-                        selection = all.subtracting(keepers)
-                    }
-                }
-                if !selection.isEmpty {
-                    quickButton("Deseleziona") {
-                        selection.removeAll()
-                    }
+        // Su più righe se serve: nessun pulsante resta tagliato sul bordo.
+        return FlowLayout(spacing: 8, lineSpacing: 8) {
+            quickButton(isMasculine ? "Seleziona tutti" : "Seleziona tutte") {
+                selection = all
+            }
+            if !keepers.isEmpty && keepers.count < members.count {
+                quickButton(hasStars
+                            ? (isMasculine ? "Tutti tranne i tuoi migliori" : "Tutte tranne le tue migliori")
+                            : (isMasculine ? "Tutti tranne il consigliato" : "Tutte tranne la consigliata")) {
+                    selection = all.subtracting(keepers)
                 }
             }
-            .padding(.vertical, 2)
+            if !selection.isEmpty {
+                quickButton("Deseleziona") {
+                    selection.removeAll()
+                }
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func quickButton(_ title: String, action: @escaping () -> Void) -> some View {
@@ -290,8 +289,9 @@ struct GroupSelectionView: View {
             HStack {
                 Text(selectionSummary(selected.count))
                     .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
                     .accessibilityIdentifier("grid.selectionCount")
-                Spacer()
+                Spacer(minLength: 8)
                 if opensComparison {
                     Button {
                         let start = selected.first?.id ?? group.suggestedKeepID ?? members[0].id
@@ -303,11 +303,11 @@ struct GroupSelectionView: View {
                 }
             }
             HStack(spacing: 8) {
-                barButton(
-                    removesStars ? "Togli stella" : "Migliore",
+                BarActionButton(
+                    title: removesStars ? "Togli stella" : "Migliore",
                     systemImage: removesStars ? "star.slash" : "star.fill",
                     tint: Theme.best,
-                    accessibility: removesStars ? "Togli la stella" : "Segna come migliori"
+                    accessibilityTitle: removesStars ? "Togli la stella" : "Segna come migliori"
                 ) {
                     if removesStars {
                         removeStars(selected)
@@ -315,10 +315,15 @@ struct GroupSelectionView: View {
                         markBest(selected)
                     }
                 }
-                barButton("Tieni", systemImage: "checkmark", tint: Theme.keep, accessibility: "Conserva le selezionate") {
+                BarActionButton(title: "Tieni", systemImage: "checkmark", tint: Theme.keep, accessibilityTitle: "Conserva le selezionate") {
                     keep(selected)
                 }
-                barButton("Elimina", systemImage: "trash", tint: Theme.remove, accessibility: "Proponi le selezionate per l'eliminazione") {
+                BarActionButton(
+                    title: "Elimina",
+                    systemImage: "trash",
+                    tint: Theme.remove,
+                    accessibilityTitle: "Proponi le selezionate per l'eliminazione"
+                ) {
                     propose(selected)
                 }
             }
@@ -331,6 +336,8 @@ struct GroupSelectionView: View {
                         GroupWording.keepBest(starredCount: starredCount, masculine: isMasculine),
                         systemImage: starredCount > 0 ? "star.fill" : "sparkles"
                     )
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -343,33 +350,8 @@ struct GroupSelectionView: View {
         .padding(.top, 10)
         .padding(.bottom, 8)
         .background(.bar)
-    }
-
-    private func barButton(
-        _ title: String,
-        systemImage: String,
-        tint: Color,
-        accessibility: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            VStack(spacing: 3) {
-                Image(systemName: systemImage)
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(tint)
-                // Colore del testo, non quello del pulsante: con la tinta grigia sembrerebbe disattivato.
-                Text(title)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 4)
-        }
-        .buttonStyle(.bordered)
-        .tint(.gray)
-        .accessibilityLabel(accessibility)
+        // La barra resta compatta anche con il testo molto grande: la griglia sopra deve restare visibile.
+        .compactControlText()
     }
 
     private func selectionSummary(_ count: Int) -> String {

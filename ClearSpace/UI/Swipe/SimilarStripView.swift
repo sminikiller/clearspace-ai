@@ -39,6 +39,8 @@ struct SimilarStripView: View {
         return !keepers.isEmpty && keepers.count < members.count
     }
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
@@ -49,44 +51,87 @@ struct SimilarStripView: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+                .minimumScaleFactor(0.8)
                 .layoutPriority(1)
                 Spacer(minLength: 4)
-                Button(action: onOpenGrid) {
-                    Label("Griglia", systemImage: "square.grid.3x3")
+                // Con il testo grande restano solo le icone: le scritte spingerebbero fuori il titolo.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 10) {
+                        gridButton(showsTitle: true)
+                        compareButton(showsTitle: true)
+                    }
+                    HStack(spacing: 14) {
+                        gridButton(showsTitle: false)
+                        compareButton(showsTitle: false)
+                    }
                 }
-                .font(.caption.weight(.semibold))
-                .accessibilityHint("Mostra tutte le anteprime in griglia, con la selezione multipla")
-                Button("Confronta", action: onCompare)
-                    .font(.caption.weight(.semibold))
             }
 
-            HStack(alignment: .center, spacing: 8) {
+            if dynamicTypeSize > .large {
+                // Testo ingrandito: anteprime su tutta la larghezza e pulsanti sotto, affiancati.
                 thumbnails
-                VStack(spacing: 5) {
-                    if canKeepBest {
-                        groupButton(
-                            GroupWording.keepBestShort(starredCount: starredCount, masculine: isMasculine),
-                            systemImage: starredCount > 0 ? "star.fill" : "sparkles",
-                            isProminent: true,
-                            hint: starredCount > 0
-                                ? "Conserva quelli con la stella e aggiunge gli altri alla lista di revisione. Non elimina nulla."
-                                : "Conserva l'elemento consigliato e aggiunge gli altri alla lista di revisione. Non elimina nulla.",
-                            action: onKeepBest
-                        )
-                    }
-                    groupButton(
-                        isMasculine ? "Tieni solo questo" : "Tieni solo questa",
-                        systemImage: "checkmark",
-                        isProminent: false,
-                        hint: "Conserva l'elemento sulla carta e aggiunge gli altri alla lista di revisione. Non elimina nulla.",
-                        action: onKeepOnlyCurrent
-                    )
+                HStack(spacing: 8) {
+                    groupButtons
                 }
-                .fixedSize()
+            } else {
+                HStack(alignment: .center, spacing: 8) {
+                    thumbnails
+                    VStack(spacing: 5) {
+                        groupButtons
+                    }
+                    .fixedSize()
+                }
             }
         }
         .padding(10)
         .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private func gridButton(showsTitle: Bool) -> some View {
+        Button(action: onOpenGrid) {
+            if showsTitle {
+                Label("Griglia", systemImage: "square.grid.3x3")
+            } else {
+                Image(systemName: "square.grid.3x3")
+            }
+        }
+        .font(.caption.weight(.semibold))
+        .accessibilityLabel("Griglia")
+        .accessibilityHint("Mostra tutte le anteprime in griglia, con la selezione multipla")
+    }
+
+    private func compareButton(showsTitle: Bool) -> some View {
+        Button(action: onCompare) {
+            if showsTitle {
+                Text("Confronta")
+            } else {
+                Image(systemName: "rectangle.split.2x1")
+            }
+        }
+        .font(.caption.weight(.semibold))
+        .accessibilityLabel("Confronta")
+    }
+
+    @ViewBuilder
+    private var groupButtons: some View {
+        if canKeepBest {
+            groupButton(
+                GroupWording.keepBestShort(starredCount: starredCount, masculine: isMasculine),
+                systemImage: starredCount > 0 ? "star.fill" : "sparkles",
+                isProminent: true,
+                hint: starredCount > 0
+                    ? "Conserva quelli con la stella e aggiunge gli altri alla lista di revisione. Non elimina nulla."
+                    : "Conserva l'elemento consigliato e aggiunge gli altri alla lista di revisione. Non elimina nulla.",
+                action: onKeepBest
+            )
+        }
+        groupButton(
+            isMasculine ? "Tieni solo questo" : "Tieni solo questa",
+            systemImage: "checkmark",
+            isProminent: false,
+            hint: "Conserva l'elemento sulla carta e aggiunge gli altri alla lista di revisione. Non elimina nulla.",
+            action: onKeepOnlyCurrent
+        )
     }
 
     private var thumbnails: some View {
@@ -153,17 +198,21 @@ struct SimilarStripView: View {
         hint: String,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
+        // Affiancati sotto le anteprime (testo grande) si dividono la larghezza in parti uguali.
+        let sharesWidth = dynamicTypeSize > .large
+        return Button(action: action) {
             HStack(spacing: 4) {
                 Image(systemName: systemImage)
                     .accessibilityHidden(true)
                 Text(title)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
             .font(.caption.weight(.semibold))
             .foregroundStyle(isProminent ? Color.white : Theme.keep)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .frame(minWidth: 132)
+            .frame(minWidth: sharesWidth ? 0 : 132, maxWidth: sharesWidth ? CGFloat.infinity : nil)
             .background(isProminent ? Theme.keep : Theme.keep.opacity(0.15), in: Capsule())
         }
         .buttonStyle(.plain)

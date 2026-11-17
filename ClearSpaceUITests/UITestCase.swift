@@ -177,24 +177,32 @@ class UITestCase: XCTestCase {
     /// Gli elementi del tutto fuori schermo (in una fila che scorre di lato) non contano, e nemmeno
     /// le anteprime di foto e video, che in una striscia scorrevole possono essere tagliate dal bordo.
     func horizontalOverflows() -> [String] {
-        let window = app.windows.firstMatch.frame
+        // Un'unica lettura dell'albero dell'accessibilità: interrogare gli elementi uno per uno
+        // richiederebbe secondi per ogni schermata.
+        guard let root = try? app.snapshot() else { return [] }
+        let window = root.frame
         guard window.width > 0 else { return [] }
         var offenders: [String] = []
-        let candidates = Array(app.staticTexts.allElementsBoundByIndex.prefix(90))
-            + Array(app.buttons.allElementsBoundByIndex.prefix(90))
-        for element in candidates {
-            guard element.exists else { continue }
-            let frame = element.frame
-            let label = element.label
-            guard !frame.isEmpty, !label.isEmpty else { continue }
-            if label.hasPrefix("Foto ") || label.hasPrefix("Video ") || label.hasPrefix("Elemento ") { continue }
-            // Solo ciò che si trova nella parte visibile, in verticale e in orizzontale.
-            guard frame.maxY > window.minY + 1, frame.minY < window.maxY - 1 else { continue }
-            guard frame.maxX > window.minX + 1, frame.minX < window.maxX - 1 else { continue }
-            if frame.minX < window.minX - 1 || frame.maxX > window.maxX + 1 {
-                offenders.append("«\(label.prefix(40))» da x=\(Int(frame.minX)) a x=\(Int(frame.maxX))")
+
+        func inspect(_ node: XCUIElementSnapshot) {
+            if node.elementType == .staticText || node.elementType == .button {
+                let frame = node.frame
+                let label = node.label
+                let isThumbnail = label.hasPrefix("Foto ") || label.hasPrefix("Video ") || label.hasPrefix("Elemento ")
+                if !frame.isEmpty, !label.isEmpty, !isThumbnail,
+                   // Solo ciò che si trova nella parte visibile, in verticale e in orizzontale.
+                   frame.maxY > window.minY + 1, frame.minY < window.maxY - 1,
+                   frame.maxX > window.minX + 1, frame.minX < window.maxX - 1,
+                   frame.minX < window.minX - 1 || frame.maxX > window.maxX + 1 {
+                    offenders.append("«\(label.prefix(40))» da x=\(Int(frame.minX)) a x=\(Int(frame.maxX))")
+                }
+            }
+            for child in node.children {
+                inspect(child)
             }
         }
+
+        inspect(root)
         return offenders
     }
 

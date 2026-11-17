@@ -75,7 +75,7 @@ struct OrganizeView: View {
                         Text(option.title).tag(option)
                     }
                 }
-                .pickerStyle(.segmented)
+                .adaptiveSegmentedStyle()
             }
 
             if folderID != nil {

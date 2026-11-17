@@ -56,6 +56,8 @@ struct GroupComparisonView: View {
             }
         }
         .background(Theme.background)
+        // La foto deve restare grande: dettagli e pulsanti non crescono oltre ciò che entra.
+        .compactControlText()
         .navigationTitle("Confronto")
         .navigationBarTitleDisplayMode(.inline)
         // Lo spazio della barra delle schede serve alla foto e ai pulsanti.
@@ -345,27 +347,27 @@ struct GroupComparisonView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// Etichette su più righe: nessuna resta tagliata sul bordo dello schermo.
     private func qualityChips(for item: IndexedItem, rating: QualityRanker.Breakdown?) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                if let rating, item.isImage {
-                    TagChip(text: "Voto \(rating.grade)/100", systemImage: "chart.bar.fill", tint: Theme.info)
-                    ForEach(Array(QualityRanker.highlights(for: item, rating: rating).enumerated()), id: \.offset) { _, highlight in
-                        TagChip(text: highlight.text, tint: tint(for: highlight.kind))
-                    }
+        FlowLayout(spacing: 6, lineSpacing: 6) {
+            if let rating, item.isImage {
+                TagChip(text: "Voto \(rating.grade)/100", systemImage: "chart.bar.fill", tint: Theme.info)
+                ForEach(Array(QualityRanker.highlights(for: item, rating: rating).enumerated()), id: \.offset) { _, highlight in
+                    TagChip(text: highlight.text, tint: tint(for: highlight.kind))
                 }
-                if item.isVideo, item.pixelWidth > 0 {
-                    TagChip(text: "\(item.pixelWidth) × \(item.pixelHeight)")
-                } else if item.pixelCount > 0 {
-                    TagChip(text: "\(Format.decimal(Double(item.pixelCount) / 1_000_000, maximumFractionDigits: 1)) MP")
-                }
-                if item.duration > 0 {
-                    TagChip(text: Format.duration(item.duration))
-                }
-                TagChip(text: Format.bytesOrUnknown(item.estimatedBytes))
-                TagChip(text: Format.date(item.createdAt))
             }
+            if item.isVideo, item.pixelWidth > 0 {
+                TagChip(text: "\(item.pixelWidth) × \(item.pixelHeight)")
+            } else if item.pixelCount > 0 {
+                TagChip(text: "\(Format.decimal(Double(item.pixelCount) / 1_000_000, maximumFractionDigits: 1)) MP")
+            }
+            if item.duration > 0 {
+                TagChip(text: Format.duration(item.duration))
+            }
+            TagChip(text: Format.bytesOrUnknown(item.estimatedBytes))
+            TagChip(text: Format.date(item.createdAt))
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func tint(for kind: QualityRanker.Highlight.Kind) -> Color {
@@ -387,13 +389,11 @@ struct GroupComparisonView: View {
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                // "questo" per video e file, "questa" per le foto.
-                let masculine = member.usesMasculineWording
                 Picker("Decisione per l'elemento selezionato", selection: decisionBinding(for: member)) {
-                    Text(masculine ? "Tieni questo" : "Tieni questa").tag(false)
-                    Text(masculine ? "Elimina questo" : "Elimina questa").tag(true)
+                    Text("Tieni").tag(false)
+                    Text("Elimina").tag(true)
                 }
-                .pickerStyle(.segmented)
+                .adaptiveSegmentedStyle()
             }
             Button {
                 toggleStar(member)

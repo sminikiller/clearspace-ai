@@ -165,6 +165,9 @@ struct SwipeSessionView: View {
                         onKeep: { commit(.keep) }
                     )
                 }
+                // La schermata dello swipe non scorre: carta, striscia e pulsanti devono starci sempre.
+                // Con il testo molto ingrandito le scritte si fermano a una dimensione che entra.
+                .compactControlText()
             } else {
                 SessionSummaryView(
                     session: session,
@@ -394,18 +397,20 @@ private struct SessionHeaderView: View {
         VStack(spacing: 6) {
             HStack {
                 Text("Elemento \(min(session.cursor + 1, session.queue.count)) di \(session.queue.count)")
-                Spacer()
+                Spacer(minLength: 8)
                 Text("Da rivedere: \(session.remainingCount)")
             }
             .font(.footnote.weight(.medium))
             .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
 
             ProgressView(value: session.progress)
 
             HStack {
                 Label("Conservati: \(session.keptCount)", systemImage: "checkmark.circle")
                     .foregroundStyle(Theme.keep)
-                Spacer()
+                Spacer(minLength: 8)
                 Label(
                     "Da eliminare: \(session.markedCount) · \(Format.bytes(session.markedBytes))",
                     systemImage: "trash.circle"
@@ -413,6 +418,8 @@ private struct SessionHeaderView: View {
                 .foregroundStyle(Theme.remove)
             }
             .font(.caption.weight(.medium))
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
 
             if let goal = session.goalBytes, let goalProgress = session.goalProgress {
                 VStack(alignment: .leading, spacing: 3) {
@@ -514,7 +521,7 @@ private struct SwipeActionBar: View {
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(0.7)
             }
             .frame(maxWidth: .infinity)
         }
@@ -548,7 +555,7 @@ private struct SessionSummaryView: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
 
-                HStack(spacing: 10) {
+                AdaptiveStack(horizontalAlignment: .center, spacing: 10) {
                     StatTile(title: "Conservati", value: Format.count(session.keptCount), systemImage: "checkmark", tint: Theme.keep)
                     StatTile(title: "Da eliminare", value: Format.count(session.markedCount), systemImage: "trash", tint: Theme.remove)
                     StatTile(title: "Rimandati", value: Format.count(session.postponedCount), systemImage: "clock", tint: Theme.later)

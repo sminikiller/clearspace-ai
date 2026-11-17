@@ -4,6 +4,7 @@ import SwiftUI
 /// e quale operazione conviene fare per prima.
 struct HomeView: View {
     @Environment(AppEnvironment.self) private var env
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var device: StorageSnapshot?
     @State private var isStarting = false
     @State private var showsSettings = false
@@ -96,7 +97,8 @@ struct HomeView: View {
     // MARK: - Spazio
 
     private var storageCards: some View {
-        HStack(alignment: .top, spacing: 12) {
+        // Affiancate se ci stanno, una sotto l'altra con il testo grande.
+        AdaptiveStack(verticalAlignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 8) {
                 Label("iPhone", systemImage: "iphone")
                     .font(.subheadline.weight(.semibold))
@@ -252,7 +254,7 @@ struct HomeView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 ProgressView(value: session.progress)
-                HStack {
+                AdaptiveStack {
                     Button("Riprendi") {
                         env.sessions.resume(session.id)
                     }
@@ -319,9 +321,13 @@ struct HomeView: View {
     }
 
     private var categoriesSection: some View {
-        VStack(spacing: 10) {
+        // Con il testo molto grande una sola colonna: in due le scritte non ci starebbero.
+        let columns = dynamicTypeSize.isAccessibilitySize
+            ? [GridItem(.flexible())]
+            : [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
+        return VStack(spacing: 10) {
             SectionHeader(title: "Categorie")
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+            LazyVGrid(columns: columns, spacing: 12) {
                 NavigationLink {
                     CollectionListView(section: .photos)
                 } label: {

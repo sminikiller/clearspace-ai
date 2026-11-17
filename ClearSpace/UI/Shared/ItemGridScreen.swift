@@ -178,8 +178,9 @@ struct ItemGridScreen: View {
             HStack {
                 Text(Format.plural(selection.count, "selezionato", "selezionati"))
                     .font(.subheadline.weight(.medium))
+                    .lineLimit(1)
                     .accessibilityIdentifier("grid.selectionCount")
-                Spacer()
+                Spacer(minLength: 8)
                 Button(selection.count == items.count ? "Deseleziona tutto" : "Seleziona tutto") {
                     if selection.count == items.count {
                         selection.removeAll()
@@ -188,40 +189,27 @@ struct ItemGridScreen: View {
                     }
                 }
                 .font(.subheadline)
+                .lineLimit(1)
             }
             HStack(spacing: 8) {
-                Button {
+                BarActionButton(title: "Da eliminare", systemImage: "trash", tint: Theme.remove) {
                     markSelection()
-                } label: {
-                    Label("Da eliminare", systemImage: "trash")
-                        .frame(maxWidth: .infinity)
                 }
-                .tint(Theme.remove)
-
-                Button {
+                BarActionButton(title: "Conserva", systemImage: "checkmark", tint: Theme.keep) {
                     env.safety.keep(Array(selection))
                     finishSelection("Elementi conservati.")
-                } label: {
-                    Label("Conserva", systemImage: "checkmark")
-                        .frame(maxWidth: .infinity)
                 }
-                .tint(Theme.keep)
-
-                Button {
+                BarActionButton(title: "Proteggi", systemImage: "lock", tint: Theme.info) {
                     env.safety.protect(Array(selection))
                     finishSelection("Elementi protetti.")
-                } label: {
-                    Label("Proteggi", systemImage: "lock")
-                        .frame(maxWidth: .infinity)
                 }
             }
-            .buttonStyle(.bordered)
-            .labelStyle(.titleAndIcon)
-            .font(.footnote)
             .disabled(selection.isEmpty)
         }
         .padding(12)
         .background(.bar)
+        // La barra resta compatta anche con il testo molto grande: la griglia sopra deve restare visibile.
+        .compactControlText()
     }
 
     // MARK: - Azioni

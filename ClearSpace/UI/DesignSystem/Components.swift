@@ -186,6 +186,146 @@ struct ButtonTitle: View {
     }
 }
 
+/// Pulsante di una barra di azioni in basso: icona sopra, scritta sotto. La scritta resta su una
+/// riga e si rimpicciolisce un po' se serve, così tre pulsanti stanno sempre affiancati.
+struct BarActionButton: View {
+    let title: String
+    let systemImage: String
+    var tint: Color = .accentColor
+    /// Testo per VoiceOver, se diverso dalla scritta breve.
+    var accessibilityTitle: String?
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 3) {
+                Image(systemName: systemImage)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(tint)
+                    .accessibilityHidden(true)
+                // Colore del testo, non quello del pulsante: con la tinta grigia sembrerebbe disattivato.
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 4)
+        }
+        .buttonStyle(.bordered)
+        .tint(.gray)
+        .accessibilityLabel(accessibilityTitle ?? title)
+    }
+}
+
+// MARK: - Layout che si adattano al testo ingrandito
+
+/// Affianca gli elementi quando ci stanno e li mette uno sotto l'altro quando non ci stanno
+/// (testo ingrandito, schermo stretto): pulsanti e testi non escono mai dallo schermo.
+struct AdaptiveStack<Content: View>: View {
+    var horizontalAlignment: HorizontalAlignment = .leading
+    var verticalAlignment: VerticalAlignment = .center
+    var spacing: CGFloat = 8
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: verticalAlignment, spacing: spacing) {
+                content()
+            }
+            VStack(alignment: horizontalAlignment, spacing: spacing) {
+                content()
+            }
+        }
+    }
+}
+
+/// Dispone gli elementi in righe che vanno a capo, come le parole di un testo. Le etichette restano
+/// tutte visibili, senza tagli sul bordo e senza dover scorrere di lato.
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 6
+    var lineSpacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var lineHeight: CGFloat = 0
+        var widest: CGFloat = 0
+        for subview in subviews {
+            let size = Self.size(of: subview, maxWidth: maxWidth)
+            if x > 0 && x + size.width > maxWidth {
+                y += lineHeight + lineSpacing
+                x = 0
+                lineHeight = 0
+            }
+            x += size.width
+            widest = max(widest, x)
+            x += spacing
+            lineHeight = max(lineHeight, size.height)
+        }
+        return CGSize(width: min(widest, maxWidth), height: y + lineHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var lineHeight: CGFloat = 0
+        for subview in subviews {
+            let size = Self.size(of: subview, maxWidth: bounds.width)
+            if x > bounds.minX && x + size.width > bounds.maxX {
+                y += lineHeight + lineSpacing
+                x = bounds.minX
+                lineHeight = 0
+            }
+            subview.place(
+                at: CGPoint(x: x, y: y),
+                anchor: .topLeading,
+                proposal: ProposedViewSize(width: size.width, height: size.height)
+            )
+            x += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
+        }
+    }
+
+    /// Dimensione naturale dell'elemento, ristretta alla larghezza disponibile se è più largo
+    /// (in quel caso il testo va a capo dentro l'elemento).
+    private static func size(of subview: LayoutSubview, maxWidth: CGFloat) -> CGSize {
+        let natural = subview.sizeThatFits(.unspecified)
+        guard natural.width > maxWidth, maxWidth.isFinite else { return natural }
+        return subview.sizeThatFits(ProposedViewSize(width: maxWidth, height: nil))
+    }
+}
+
+/// Selettore a segmenti che con il testo molto grande diventa un menu: i segmenti affiancati
+/// taglierebbero le scritte.
+private struct AdaptivePickerStyle: ViewModifier {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            content.pickerStyle(.menu)
+        } else {
+            content.pickerStyle(.segmented)
+        }
+    }
+}
+
+extension View {
+    /// Segmenti con il testo normale, menu con il testo molto grande.
+    func adaptiveSegmentedStyle() -> some View {
+        modifier(AdaptivePickerStyle())
+    }
+
+    /// Limite alla dimensione del testo per barre di comandi e controlli fitti, che non possono
+    /// crescere oltre lo spazio dello schermo. Il resto dell'app segue le impostazioni di iOS.
+    func compactControlText() -> some View {
+        dynamicTypeSize(...DynamicTypeSize.xxLarge)
+    }
+}
+
 /// Riga "etichetta: valore" con il valore allineato a destra.
 struct DetailRow: View {
     let label: String

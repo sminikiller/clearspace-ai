@@ -141,7 +141,7 @@ struct ReviewView: View {
 
     private func sectionView(_ section: ReviewSection) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
+            AdaptiveStack(verticalAlignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(section.title)
                         .font(.headline)
@@ -149,7 +149,7 @@ struct ReviewView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                Spacer()
+                Spacer(minLength: 8)
                 Button("Ripristina gruppo") {
                     env.safety.restore(section.items.map { $0.id })
                 }
@@ -235,7 +235,8 @@ struct ReviewView: View {
                 }
                 Spacer()
             }
-            HStack(spacing: 8) {
+            // Affiancati se ci stanno, uno sopra l'altro con il testo grande.
+            AdaptiveStack(spacing: 8) {
                 Button {
                     showsArchiveWizard = true
                 } label: {
@@ -263,6 +264,7 @@ struct ReviewView: View {
         }
         .padding(12)
         .background(.bar)
+        .compactControlText()
     }
 
     private var deviceBytes: Int64 { items.reduce(0) { $0 + $1.deviceBytes } }

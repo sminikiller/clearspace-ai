@@ -16,7 +16,7 @@ struct QuickCleanupSheet: View {
                             Text("\(size)").tag(size)
                         }
                     }
-                    .pickerStyle(.segmented)
+                    .adaptiveSegmentedStyle()
                 } header: {
                     Text("Elementi per sessione")
                 } footer: {
@@ -70,7 +70,7 @@ struct GoalCleanupSheet: View {
                             Text("\(value) GB").tag(value)
                         }
                     }
-                    .pickerStyle(.segmented)
+                    .adaptiveSegmentedStyle()
                 } header: {
                     Text("Spazio potenziale da raggiungere")
                 } footer: {

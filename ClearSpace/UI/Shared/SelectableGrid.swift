@@ -195,11 +195,14 @@ struct SelectableGrid<Header: View, Footer: View, Cell: View>: View {
         case .scrolling:
             return
         case .idle:
-            // Come nell'app Foto: si seleziona solo se il gesto parte in orizzontale.
-            // Uno che parte in verticale resta uno scorrimento.
+            // Come nell'app Foto: si seleziona solo se il gesto parte chiaramente in orizzontale.
+            // Uno che parte in verticale o in diagonale resta uno scorrimento, così la griglia
+            // scorre sempre quando si vuole scorrerla.
             let horizontal = abs(value.translation.width)
             let vertical = abs(value.translation.height)
-            guard horizontal > vertical,
+            // Prima di decidere serve un movimento abbastanza ampio da capirne la direzione.
+            guard max(horizontal, vertical) >= 12 else { return }
+            guard horizontal > vertical * 2,
                   let start = metrics.index(at: value.startLocation, count: items.count),
                   let next = DragSelection(anchor: start, ids: items.map { $0.id }, current: selection) else {
                 intent = .scrolling
