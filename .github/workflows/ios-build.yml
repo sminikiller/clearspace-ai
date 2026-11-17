@@ -43,6 +43,7 @@ jobs:
           xcrun simctl list devices available | grep "$DEVICE_ID"
 
       - name: Compilazione di app e test
+        id: build
         run: |
           set +e
           xcodebuild build-for-testing \
@@ -106,6 +107,7 @@ jobs:
           exit $STATUS
 
       - name: Prova d'uso sul simulatore
+        id: smoke
         run: |
           set +e
           xcodebuild test-without-building \
@@ -113,7 +115,7 @@ jobs:
             -scheme ClearSpace \
             -destination "id=$DEVICE_ID" \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
-            -only-testing:ClearSpaceUITests \
+            -only-testing:ClearSpaceUITests/SmokeTests \
             -parallel-testing-enabled NO \
             -resultBundlePath "$RUNNER_TEMP/UITests.xcresult" \
             > uitest.log 2>&1
@@ -124,26 +126,59 @@ jobs:
           grep -E "TEST EXECUTE" uitest.log
           exit $STATUS
 
+      # Molti iPhone usano il testo ingrandito e il tema scuro: il giro di tutte le schermate in queste
+      # condizioni scopre testi che escono dallo schermo, pulsanti irraggiungibili e colori illeggibili.
+      - name: Prova del layout con testo grande e tema scuro
+        if: always() && steps.build.outcome == 'success'
+        run: |
+          set +e
+          xcrun simctl ui "$DEVICE_ID" appearance dark
+          xcodebuild test-without-building \
+            -project ClearSpace.xcodeproj \
+            -scheme ClearSpace \
+            -destination "id=$DEVICE_ID" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -only-testing:ClearSpaceUITests/LayoutTests \
+            -parallel-testing-enabled NO \
+            -resultBundlePath "$RUNNER_TEMP/LayoutTests.xcresult" \
+            > layout.log 2>&1
+          STATUS=$?
+          echo "Prove passate: $(grep -ciE 'test case .* passed' layout.log)"
+          echo "Prove fallite: $(grep -ciE 'test case .* failed' layout.log)"
+          grep -iE "error:" layout.log | sed "s#$GITHUB_WORKSPACE/##" | sort -u | head -150
+          grep -E "TEST EXECUTE" layout.log
+          exit $STATUS
+
       - name: Esporta le schermate
         if: always()
         run: |
-          mkdir -p shots
-          xcrun xcresulttool export attachments \
-            --path "$RUNNER_TEMP/UITests.xcresult" \
-            --output-path shots || echo "Esportazione delle schermate non riuscita"
-          python3 - <<'PY'
-          import json, os, re
-          manifest = os.path.join("shots", "manifest.json")
+          export_shots() {
+            mkdir -p "$2"
+            [ -d "$1" ] || { echo "Nessun risultato in $1"; return; }
+            xcrun xcresulttool export attachments --path "$1" --output-path "$2" || echo "Esportazione non riuscita: $1"
+            python3 - "$2" <<'PY'
+          import json, os, re, sys
+          folder = sys.argv[1]
+          manifest = os.path.join(folder, "manifest.json")
           if os.path.exists(manifest):
               for test in json.load(open(manifest)):
                   for item in test.get("attachments", []):
-                      source = os.path.join("shots", item.get("exportedFileName", ""))
+                      source = os.path.join(folder, item.get("exportedFileName", ""))
                       label = item.get("suggestedHumanReadableName") or ""
                       label = re.sub(r"_\d+_[0-9A-Fa-f-]{36}(?=\.\w+$)", "", label)
                       if os.path.isfile(source) and label:
-                          os.replace(source, os.path.join("shots", re.sub(r"[^\w.\-]", "_", label)))
+                          os.replace(source, os.path.join(folder, re.sub(r"[^\w.\-]", "_", label)))
           PY
+          }
+          export_shots "$RUNNER_TEMP/UITests.xcresult" shots
+          export_shots "$RUNNER_TEMP/LayoutTests.xcresult" shots-layout
+          # Copie ridotte delle schermate del layout, comode da controllare tutte insieme.
+          mkdir -p shots-layout-small
+          for file in shots-layout/*.png; do
+            [ -f "$file" ] && sips --resampleWidth 560 "$file" --out "shots-layout-small/$(basename "$file")" > /dev/null
+          done
           ls shots | head -80
+          ls shots-layout-small | head -120
 
       - name: Salva schermate e log completi
         if: always()
@@ -155,6 +190,8 @@ jobs:
             media.log
             test.log
             uitest.log
+            layout.log
             shots
+            shots-layout-small
           if-no-files-found: ignore
           retention-days: 7
