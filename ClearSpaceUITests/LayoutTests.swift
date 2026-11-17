@@ -317,7 +317,15 @@ final class LayoutTests: UITestCase {
         let swipe = app.buttons
             .matching(NSPredicate(format: "label == %@ AND enabled == true", "Rivedi con gli swipe"))
             .firstMatch
-        guard swipe.waitForExistence(timeout: 20) else {
+        // L'elenco crea le righe solo quando entrano nello schermo: con il testo grande il passo delle
+        // foto simili sta più in basso, quindi lo si cerca scorrendo.
+        _ = swipe.waitForExistence(timeout: 8)
+        var attempts = 0
+        while !swipe.exists && attempts < 8 {
+            scroll(by: 0.4)
+            attempts += 1
+        }
+        guard swipe.exists else {
             checkLayout("L41-guidata-senza-simili")
             XCTFail("La pulizia guidata non propone le foto simili da rivedere")
             goBack()
