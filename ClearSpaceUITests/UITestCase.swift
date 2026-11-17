@@ -111,6 +111,31 @@ class UITestCase: XCTestCase {
         }
     }
 
+    /// Porta l'elemento nella metà alta dello schermo, lontano dalle barre di pulsanti in basso che con
+    /// il testo grande possono coprire buona parte della schermata.
+    func bringToUpperHalf(_ element: XCUIElement) {
+        let screen = app.windows.firstMatch.frame
+        var step = 0
+        while step < 12 {
+            guard element.exists else {
+                scroll(by: step < 5 ? 0.4 : -0.4)
+                step += 1
+                continue
+            }
+            let middle = element.frame.midY
+            if middle > screen.minY + 140 && middle < screen.minY + screen.height * 0.55 {
+                return
+            }
+            let previous = element.frame
+            let distance = (middle - (screen.minY + screen.height * 0.35)) / max(screen.height, 1)
+            scroll(by: min(0.45, max(-0.45, distance)))
+            if element.frame == previous {
+                return
+            }
+            step += 1
+        }
+    }
+
     /// Trascina il dito in orizzontale dalla cella `from` alla cella `to`, come per selezionare
     /// più foto insieme nell'app Foto.
     func dragAcrossGrid(from: Int, to: Int) {

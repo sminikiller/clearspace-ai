@@ -395,14 +395,23 @@ final class LayoutTests: UITestCase {
         checkLayout("L53-conferma-3")
         // Nulla viene eliminato: si chiude la conferma e si ripristina tutto.
         closeTopScreen()
+        // Con il testo grande la barra in basso copre parte dell'elenco: il pulsante va portato in alto.
         let restore = app.buttons["Ripristina gruppo"].firstMatch
-        bringIntoView(restore)
+        bringToUpperHalf(restore)
         if restore.exists && restore.isHittable {
             restore.tap()
             pause(1.5)
             checkLayout("L54-revisione-ripristinata")
+            XCTAssertTrue(
+                element(containing: "Nessun elemento da eliminare").waitForExistence(timeout: 5),
+                "Revisione: il ripristino del gruppo non ha svuotato l'elenco"
+            )
         } else {
             XCTFail("Revisione: «Ripristina gruppo» non si raggiunge")
+        }
+        // Se un tocco ha aperto un altro pannello, lo si chiude prima di proseguire.
+        if !app.tabBars.firstMatch.isHittable {
+            closeTopScreen()
         }
     }
 
