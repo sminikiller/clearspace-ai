@@ -357,9 +357,10 @@ struct GroupSelectionView: View {
                 Image(systemName: systemImage)
                     .font(.body.weight(.semibold))
                     .foregroundStyle(tint)
+                // Colore del testo, non quello del pulsante: con la tinta grigia sembrerebbe disattivato.
                 Text(title)
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(Color.primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
