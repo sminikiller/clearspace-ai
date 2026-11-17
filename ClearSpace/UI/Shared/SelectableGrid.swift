@@ -150,7 +150,6 @@ struct SelectableGrid<Header: View, Footer: View, Cell: View>: View {
                     .id(item.id)
             }
         }
-        .coordinateSpace(gridSpace)
         .onGeometryChange(for: CGFloat.self) { geometry in
             geometry.size.width
         } action: { width in
@@ -162,6 +161,8 @@ struct SelectableGrid<Header: View, Footer: View, Cell: View>: View {
             tracker.gridTop = top
         }
         .simultaneousGesture(dragGesture(proxy: proxy), including: isSelecting ? .all : .subviews)
+        // Per ultimo: lo spazio con nome deve racchiudere il gesto, che vi misura la posizione del dito.
+        .coordinateSpace(gridSpace)
     }
 
     private func tap(_ item: IndexedItem) {

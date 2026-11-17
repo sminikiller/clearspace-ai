@@ -596,10 +596,15 @@ final class SmokeTests: XCTestCase {
         }
         select.tap()
         if gridCell(0).waitForExistence(timeout: 5) && gridCell(2).exists {
-            dragAcrossGrid(from: 0, to: 2)
+            // Con almeno due righe il gesto scende anche di una riga: dalla prima cella alla sesta
+            // (seconda riga, terza colonna) devono risultare selezionate sei celle.
+            let crossesRows = gridCell(5).exists
+            dragAcrossGrid(from: 0, to: crossesRows ? 5 : 2)
+            let expected = crossesRows ? "6 selezionati" : "3 selezionati"
+            let counter = app.staticTexts["grid.selectionCount"]
             XCTAssertTrue(
-                waitForLabel(app.staticTexts["grid.selectionCount"], "3 selezionati", timeout: 4),
-                "Il trascinamento nella griglia non ha selezionato tre elementi"
+                waitForLabel(counter, expected, timeout: 4),
+                "Il trascinamento nella griglia non ha selezionato le celle attese (\(counter.label), attese \(expected))"
             )
             pause(0.5)
             capture("24b-griglia-selezione-rapida")
