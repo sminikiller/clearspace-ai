@@ -241,6 +241,23 @@ struct AdaptiveStack<Content: View>: View {
     }
 }
 
+/// Contenuto centrato in verticale quando ci sta e che scorre quando è più alto dello spazio
+/// disponibile (per esempio con il testo molto ingrandito): non resta mai tagliato in alto e in basso.
+struct CenteredScrollView<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        GeometryReader { geometry in
+            ScrollView {
+                content()
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: geometry.size.height)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+        }
+    }
+}
+
 /// Dispone gli elementi in righe che vanno a capo, come le parole di un testo. Le etichette restano
 /// tutte visibili, senza tagli sul bordo e senza dover scorrere di lato.
 struct FlowLayout: Layout {

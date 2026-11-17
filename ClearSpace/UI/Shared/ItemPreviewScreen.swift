@@ -70,7 +70,7 @@ struct ItemPreviewScreen: View {
     }
 
     private func actionBar(for item: IndexedItem) -> some View {
-        HStack(spacing: 12) {
+        AdaptiveStack(spacing: 12) {
             Button {
                 let result = env.safety.apply(.delete, to: item.id)
                 handle(result)
@@ -94,6 +94,8 @@ struct ItemPreviewScreen: View {
         .controlSize(.large)
         .padding()
         .background(.bar)
+        // La foto resta grande anche con il testo molto ingrandito.
+        .compactControlText()
     }
 
     private func handle(_ result: MarkResult?) {
@@ -231,6 +233,14 @@ struct DocumentPreviewView: View {
     @State private var previewURL: URL?
 
     var body: some View {
+        // Scorre se non ci sta (testo molto grande), altrimenti resta centrato.
+        CenteredScrollView {
+            documentContent
+        }
+        .quickLookPreview($previewURL)
+    }
+
+    private var documentContent: some View {
         VStack(spacing: 16) {
             ItemThumbnailView(item: item, pointSide: 320, fill: false)
                 .frame(maxWidth: 320, maxHeight: 420)
@@ -252,7 +262,6 @@ struct DocumentPreviewView: View {
             .buttonStyle(.borderedProminent)
         }
         .padding()
-        .quickLookPreview($previewURL)
     }
 }
 
@@ -265,6 +274,26 @@ struct AudioPlaybackView: View {
     @State private var bars: [Float] = []
 
     var body: some View {
+        // Scorre se non ci sta (testo molto grande), altrimenti resta centrato.
+        CenteredScrollView {
+            playerContent
+        }
+        .task(id: item.id) {
+            guard let url = env.folders.url(for: item) else { return }
+            controller.load(url: url)
+            let analysis = await Task.detached(priority: .userInitiated) {
+                try? AudioAnalyzer.analyze(url: url)
+            }.value
+            if let analysis {
+                bars = AudioAnalyzer.waveform(from: analysis.envelope, bars: 90)
+            }
+        }
+        .onDisappear {
+            controller.stop()
+        }
+    }
+
+    private var playerContent: some View {
         VStack(spacing: 20) {
             Image(systemName: "waveform")
                 .font(.system(size: 44))
@@ -276,10 +305,11 @@ struct AudioPlaybackView: View {
             GeometryReader { geometry in
                 WaveformView(bars: bars, progress: controller.progress)
                     .contentShape(Rectangle())
+                    // Un tocco sulla forma d'onda sposta la riproduzione in quel punto. È un tocco e non
+                    // un trascinamento, così non blocca lo scorrimento della schermata.
                     .gesture(
-                        DragGesture(minimumDistance: 0)
+                        SpatialTapGesture()
                             .onEnded { value in
-                                // Un tocco sulla forma d'onda sposta la riproduzione in quel punto.
                                 let width = max(1, geometry.size.width)
                                 controller.seek(toFraction: Double(value.location.x / width))
                             }
@@ -311,19 +341,6 @@ struct AudioPlaybackView: View {
             }
         }
         .padding(24)
-        .task(id: item.id) {
-            guard let url = env.folders.url(for: item) else { return }
-            controller.load(url: url)
-            let analysis = await Task.detached(priority: .userInitiated) {
-                try? AudioAnalyzer.analyze(url: url)
-            }.value
-            if let analysis {
-                bars = AudioAnalyzer.waveform(from: analysis.envelope, bars: 90)
-            }
-        }
-        .onDisappear {
-            controller.stop()
-        }
     }
 }
 

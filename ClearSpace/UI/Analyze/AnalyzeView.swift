@@ -65,7 +65,8 @@ struct AnalyzeView: View {
     @ViewBuilder
     private var controls: some View {
         if scan.isRunning {
-            HStack {
+            // Affiancati se ci stanno, uno sotto l'altro con il testo grande.
+            AdaptiveStack {
                 if scan.isPaused {
                     Button {
                         scan.resume()
@@ -89,7 +90,7 @@ struct AnalyzeView: View {
                 .buttonStyle(.bordered)
             }
         } else {
-            HStack {
+            AdaptiveStack {
                 Button {
                     scan.start(deep: true)
                 } label: {
