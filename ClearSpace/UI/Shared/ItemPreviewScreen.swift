@@ -146,7 +146,8 @@ struct ZoomablePhotoView: View {
                 .padding(.bottom, 16)
         }
         .task(id: LoadKey(id: item.id, attempt: loader.attempt)) {
-            await loader.load(item: item, pixelSide: 3_000, env: env)
+            // A tutto schermo si sta esaminando proprio questa foto: va mostrata nitida.
+            await loader.load(item: item, pixelSide: 3_000, env: env, inspecting: true)
         }
     }
 }

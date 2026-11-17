@@ -248,6 +248,23 @@ final class SessionManager {
         return (marked.count, blocked)
     }
 
+    /// Segna gli elementi come «migliori»: vengono conservati e mostrati con una stella. La scelta di
+    /// conservarli entra nella sessione come le altre, quindi si annulla con lo stesso gesto (e con
+    /// lei sparisce la stella). Restituisce quanti elementi hanno ora la stella.
+    @discardableResult
+    func markBest(_ ids: [UUID]) -> Int {
+        let present = ids.filter { store.item($0) != nil }
+        guard !present.isEmpty else { return 0 }
+        decideGroup(keep: present, delete: [])
+        store.setStarred(true, for: present)
+        return present.count
+    }
+
+    /// Toglie la stella. Gli elementi restano conservati.
+    func removeBest(_ ids: [UUID]) {
+        store.setStarred(false, for: ids)
+    }
+
     /// Annulla l'ultima mossa (una scelta singola o una scelta di gruppo), ripristinando lo stato
     /// precedente degli elementi. Restituisce quante decisioni sono state annullate.
     @discardableResult

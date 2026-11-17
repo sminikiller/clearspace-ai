@@ -199,6 +199,16 @@ final class AppEnvironment {
         conditions.canDownload(wifiOnly: preferences.values.wifiOnlyDownloads)
     }
 
+    /// Indica se si può scaricare la versione nitida della sola foto che l'utente sta esaminando
+    /// (confronto, tutto schermo), anche con la rete cellulare: una foto alla volta, mai con
+    /// la modalità Dati ridotti attiva.
+    var canDownloadForInspection: Bool {
+        if canDownloadForViewing { return true }
+        return preferences.values.sharpPreviewsOnCellular
+            && conditions.isOnline
+            && !conditions.isLowDataMode
+    }
+
     // MARK: - Scatto migliore
 
     /// Calcola subito, per un gruppo, le misure che mancano e aggiorna il candidato suggerito.

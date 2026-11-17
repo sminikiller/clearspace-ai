@@ -45,6 +45,8 @@ final class SystemConditionsMonitor {
     private(set) var isOnline = true
     /// Connessione non a consumo (Wi‑Fi o cavo).
     private(set) var isOnUnmeteredNetwork = false
+    /// Modalità Dati ridotti attiva: niente download che l'utente non ha chiesto esplicitamente.
+    private(set) var isLowDataMode = false
     private(set) var batteryLevel: Float = 1
     private(set) var isCharging = false
     private(set) var isLowPowerMode = false
@@ -62,9 +64,11 @@ final class SystemConditionsMonitor {
         pathMonitor.pathUpdateHandler = { [weak self] path in
             let online = path.status == .satisfied
             let unmetered = online && !path.isExpensive && !path.isConstrained
+            let constrained = path.isConstrained
             Task { @MainActor in
                 self?.isOnline = online
                 self?.isOnUnmeteredNetwork = unmetered
+                self?.isLowDataMode = constrained
             }
         }
         pathMonitor.start(queue: DispatchQueue(label: "clearspace.network-monitor"))

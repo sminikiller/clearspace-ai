@@ -86,10 +86,11 @@ struct SettingsView: View {
     private var reviewSection: some View {
         Section {
             Toggle("Riproduci i video automaticamente", isOn: env.preferences.binding(\.autoplayVideos))
+            Toggle("Foto nitide anche con la rete cellulare", isOn: env.preferences.binding(\.sharpPreviewsOnCellular))
         } header: {
             Text("Revisione")
         } footer: {
-            Text("Nella modalità swipe i video partono da soli, senza audio: un tocco li mette in pausa, il pulsante dell'altoparlante attiva il sonoro. Le anteprime nitide delle foto su iCloud vengono scaricate rispettando l'impostazione Wi‑Fi qui sopra.")
+            Text("Nella modalità swipe i video partono da soli, senza audio: un tocco li mette in pausa, il pulsante dell'altoparlante attiva il sonoro. Nel confronto e a tutto schermo la foto che stai guardando viene scaricata nitida da iCloud anche con la rete cellulare, una alla volta e mai con Dati ridotti attivo. Le altre anteprime rispettano l'impostazione Wi‑Fi qui sopra.")
         }
     }
 

@@ -38,6 +38,7 @@ struct ItemQuery: Sendable {
 }
 
 /// Griglia di elementi con ordinamento, selezione multipla e avvio della modalità swipe.
+/// Con «Seleziona» si scelgono gli elementi a tocchi o trascinando il dito, come nell'app Foto.
 /// Le azioni disponibili cambiano soltanto lo stato di revisione o la protezione degli elementi.
 struct ItemGridScreen: View {
     let query: ItemQuery
@@ -56,8 +57,6 @@ struct ItemGridScreen: View {
     @State private var previewItem: IndexedItem?
     @State private var toast: String?
 
-    private let columns = [GridItem(.adaptive(minimum: 100, maximum: 170), spacing: 3)]
-
     private var activeSort: ItemSort { sort ?? query.defaultSort }
 
     private struct ReloadKey: Equatable {
@@ -66,8 +65,13 @@ struct ItemGridScreen: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
+        SelectableGrid(
+            items: Array(items.prefix(visibleCount)),
+            selection: $selection,
+            isSelecting: isSelecting,
+            minimumCellSide: 100,
+            onOpen: { item in previewItem = item },
+            header: {
                 header
                 if items.isEmpty && !isLoading {
                     ContentUnavailableView(
@@ -76,13 +80,26 @@ struct ItemGridScreen: View {
                         description: Text("Non ci sono contenuti in questa categoria, oppure l'analisi non li ha ancora esaminati.")
                     )
                     .padding(.top, 40)
-                } else {
-                    grid
                 }
+            },
+            footer: {
+                if items.count > visibleCount {
+                    Button("Mostra altri \(min(300, items.count - visibleCount))") {
+                        visibleCount += 300
+                    }
+                    .buttonStyle(.bordered)
+                    .frame(maxWidth: .infinity)
+                }
+            },
+            cell: { item, isSelected in
+                ItemTile(
+                    item: item,
+                    isSelected: isSelected,
+                    showsSelection: isSelecting,
+                    isProtected: protectedIDs.contains(item.id)
+                )
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 24)
-        }
+        )
         .background(Theme.background)
         .navigationTitle(query.title)
         .navigationBarTitleDisplayMode(.inline)
@@ -132,34 +149,6 @@ struct ItemGridScreen: View {
         .padding(.top, 8)
     }
 
-    private var grid: some View {
-        VStack(spacing: 12) {
-            LazyVGrid(columns: columns, spacing: 3) {
-                ForEach(items.prefix(visibleCount)) { item in
-                    ItemTile(
-                        item: item,
-                        isSelected: selection.contains(item.id),
-                        showsSelection: isSelecting,
-                        isProtected: protectedIDs.contains(item.id)
-                    )
-                    .onTapGesture {
-                        if isSelecting {
-                            toggle(item.id)
-                        } else {
-                            previewItem = item
-                        }
-                    }
-                }
-            }
-            if items.count > visibleCount {
-                Button("Mostra altri \(min(300, items.count - visibleCount))") {
-                    visibleCount += 300
-                }
-                .buttonStyle(.bordered)
-            }
-        }
-    }
-
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
@@ -189,6 +178,7 @@ struct ItemGridScreen: View {
             HStack {
                 Text(Format.plural(selection.count, "selezionato", "selezionati"))
                     .font(.subheadline.weight(.medium))
+                    .accessibilityIdentifier("grid.selectionCount")
                 Spacer()
                 Button(selection.count == items.count ? "Deseleziona tutto" : "Seleziona tutto") {
                     if selection.count == items.count {
@@ -235,14 +225,6 @@ struct ItemGridScreen: View {
     }
 
     // MARK: - Azioni
-
-    private func toggle(_ id: UUID) {
-        if selection.contains(id) {
-            selection.remove(id)
-        } else {
-            selection.insert(id)
-        }
-    }
 
     private func markSelection() {
         let result = env.safety.markForDeletion(Array(selection))

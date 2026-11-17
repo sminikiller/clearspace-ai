@@ -90,9 +90,16 @@ struct SwipeCardView: View {
 
     private var badges: some View {
         VStack(alignment: .leading, spacing: 5) {
+            if item.isStarred {
+                cardBadge(GroupWording.starred(masculine: item.usesMasculineWording), "star.fill", iconTint: Theme.best)
+            }
             if let group {
                 if group.suggestedKeepID == item.id {
-                    cardBadge("Migliore del gruppo", "star.fill", tint: Theme.keep)
+                    cardBadge(
+                        item.usesMasculineWording ? "Il consigliato del gruppo" : "La consigliata del gruppo",
+                        "sparkles",
+                        tint: Theme.keep
+                    )
                 } else if group.kind.isDuplicateKind {
                     cardBadge("Ha \(group.memberIDs.count - 1) \(group.memberIDs.count == 2 ? "copia" : "copie")", "square.on.square")
                 } else {
@@ -126,13 +133,23 @@ struct SwipeCardView: View {
         return "Forse sfocata"
     }
 
-    private func cardBadge(_ text: String, _ systemImage: String, tint: Color = .black.opacity(0.55)) -> some View {
-        Label(text, systemImage: systemImage)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(tint, in: Capsule())
+    private func cardBadge(
+        _ text: String,
+        _ systemImage: String,
+        tint: Color = .black.opacity(0.55),
+        iconTint: Color = .white
+    ) -> some View {
+        Label {
+            Text(text)
+        } icon: {
+            Image(systemName: systemImage)
+                .foregroundStyle(iconTint)
+        }
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(.white)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(tint, in: Capsule())
     }
 
     private var caption: some View {

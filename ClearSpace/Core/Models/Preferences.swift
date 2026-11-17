@@ -113,6 +113,9 @@ struct UserPreferences: Codable, Equatable, Sendable {
     var largeVideoThresholdMB = 100
     /// Nella modalità swipe i video partono da soli, senza audio.
     var autoplayVideos = true
+    /// La foto che si sta esaminando (confronto, tutto schermo) si scarica nitida anche con la rete
+    /// cellulare. Le altre anteprime rispettano `wifiOnlyDownloads`.
+    var sharpPreviewsOnCellular = true
     var reminderFrequency: ReminderFrequency = .off
     var protection = ProtectionRules()
     var transcriptionLocaleIdentifier = "it-IT"
@@ -136,6 +139,7 @@ struct UserPreferences: Codable, Equatable, Sendable {
         quickSessionSize = try container.decodeIfPresent(Int.self, forKey: .quickSessionSize) ?? 50
         largeVideoThresholdMB = try container.decodeIfPresent(Int.self, forKey: .largeVideoThresholdMB) ?? 100
         autoplayVideos = try container.decodeIfPresent(Bool.self, forKey: .autoplayVideos) ?? true
+        sharpPreviewsOnCellular = try container.decodeIfPresent(Bool.self, forKey: .sharpPreviewsOnCellular) ?? true
         reminderFrequency = try container.decodeIfPresent(ReminderFrequency.self, forKey: .reminderFrequency) ?? .off
         protection = try container.decodeIfPresent(ProtectionRules.self, forKey: .protection) ?? ProtectionRules()
         transcriptionLocaleIdentifier = try container.decodeIfPresent(String.self, forKey: .transcriptionLocaleIdentifier) ?? "it-IT"

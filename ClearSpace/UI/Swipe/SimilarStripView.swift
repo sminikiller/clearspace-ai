@@ -4,24 +4,39 @@ import SwiftUI
 ///
 /// - Un tocco su un'anteprima porta quell'elemento sulla carta: lo si guarda (un video parte subito)
 ///   e lo si decide con i soliti gesti e pulsanti. Vale anche per gli elementi già decisi.
-/// - Tenendo premuto si può conservare o scartare un elemento senza spostarsi.
-/// - I due pulsanti a destra chiudono l'intero gruppo: tenere il consigliato oppure quello sulla carta.
+/// - Tenendo premuto si può conservare, scartare o segnare come migliore un elemento senza spostarsi.
+/// - «Griglia» apre tutte le anteprime con la selezione multipla, «Confronta» le mette a confronto.
+/// - I due pulsanti a destra chiudono l'intero gruppo: tenere le migliori (le stelle dell'utente
+///   o, se non ce ne sono, quella consigliata) oppure quello sulla carta.
 struct SimilarStripView: View {
     let group: ItemGroup
     let members: [IndexedItem]
     let currentID: UUID
     /// Porta sulla carta l'elemento indicato.
     var onSelect: (UUID) -> Void
+    var onOpenGrid: () -> Void
     var onCompare: () -> Void
     var onKeepBest: () -> Void
     /// Conserva l'elemento sulla carta e propone tutti gli altri per l'eliminazione.
     var onKeepOnlyCurrent: () -> Void
     /// Decide un singolo elemento del gruppo senza portarlo sulla carta.
     var onDecide: (UUID, SwipeChoice) -> Void
+    /// Mette o toglie la stella dei migliori.
+    var onToggleBest: (UUID) -> Void
 
     /// I video sono maschili ("il migliore"), le foto femminili ("la migliore").
     private var isMasculine: Bool {
         !(members.first?.isImage ?? true)
+    }
+
+    private var starredCount: Int {
+        members.filter { $0.isStarred }.count
+    }
+
+    /// Il pulsante «tieni le migliori» serve solo se c'è qualcosa da tenere e qualcosa da scartare.
+    private var canKeepBest: Bool {
+        let keepers = GroupChoice.preferredKeepers(members: members, suggestedID: group.suggestedKeepID)
+        return !keepers.isEmpty && keepers.count < members.count
     }
 
     var body: some View {
@@ -34,12 +49,13 @@ struct SimilarStripView: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-                Text("Tocca per guardarli")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-                    .layoutPriority(-1)
+                .layoutPriority(1)
                 Spacer(minLength: 4)
+                Button(action: onOpenGrid) {
+                    Label("Griglia", systemImage: "square.grid.3x3")
+                }
+                .font(.caption.weight(.semibold))
+                .accessibilityHint("Mostra tutte le anteprime in griglia, con la selezione multipla")
                 Button("Confronta", action: onCompare)
                     .font(.caption.weight(.semibold))
             }
@@ -47,12 +63,14 @@ struct SimilarStripView: View {
             HStack(alignment: .center, spacing: 8) {
                 thumbnails
                 VStack(spacing: 5) {
-                    if group.suggestedKeepID != nil {
+                    if canKeepBest {
                         groupButton(
-                            isMasculine ? "Tieni il migliore" : "Tieni la migliore",
-                            systemImage: "star.fill",
+                            GroupWording.keepBestShort(starredCount: starredCount, masculine: isMasculine),
+                            systemImage: starredCount > 0 ? "star.fill" : "sparkles",
                             isProminent: true,
-                            hint: "Conserva l'elemento consigliato e aggiunge gli altri alla lista di revisione. Non elimina nulla.",
+                            hint: starredCount > 0
+                                ? "Conserva quelli con la stella e aggiunge gli altri alla lista di revisione. Non elimina nulla."
+                                : "Conserva l'elemento consigliato e aggiunge gli altri alla lista di revisione. Non elimina nulla.",
                             action: onKeepBest
                         )
                     }
@@ -88,6 +106,19 @@ struct SimilarStripView: View {
                                 onSelect(member.id)
                             } label: {
                                 Label(member.isVideo ? "Guarda" : "Mostra sulla carta", systemImage: member.isVideo ? "play" : "eye")
+                            }
+                            if member.isStarred {
+                                Button {
+                                    onToggleBest(member.id)
+                                } label: {
+                                    Label("Togli la stella", systemImage: "star.slash")
+                                }
+                            } else {
+                                Button {
+                                    onToggleBest(member.id)
+                                } label: {
+                                    Label("Segna come migliore", systemImage: "star")
+                                }
                             }
                             Button {
                                 onDecide(member.id, .keep)
@@ -157,8 +188,15 @@ struct SimilarStripView: View {
                 }
             }
             .overlay(alignment: .topTrailing) {
-                if isSuggested {
-                    miniBadge("star.fill", tint: Theme.keep)
+                if member.isStarred {
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(Theme.best)
+                        .frame(width: 16, height: 16)
+                        .background(.black.opacity(0.6), in: Circle())
+                        .padding(2)
+                } else if isSuggested {
+                    miniBadge("sparkles", tint: Theme.keep)
                 }
             }
             .overlay(alignment: .topLeading) {
@@ -203,6 +241,7 @@ struct SimilarStripView: View {
     private func description(of member: IndexedItem, position: Int) -> String {
         var parts = ["\(member.isVideo ? "Video" : member.isImage ? "Foto" : "Elemento") \(position) del gruppo"]
         if member.id == currentID { parts.append("sulla carta") }
+        if member.isStarred { parts.append(GroupWording.starred(masculine: member.usesMasculineWording).lowercased()) }
         if member.id == group.suggestedKeepID { parts.append("consigliato") }
         if member.duration > 0 { parts.append(Format.duration(member.duration)) }
         if member.reviewStatus != .unreviewed { parts.append(member.reviewStatus.title) }

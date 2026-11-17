@@ -13,10 +13,11 @@ Il codice è stato scritto su Windows, dove Xcode non esiste. Compilazione, test
 Verificato a ogni modifica del codice (ultimo esito: tutto superato):
 
 - compilazione di app e test senza errori;
-- 104 test unitari sulla logica: regole di sicurezza, piano di eliminazione, sessioni e scelte di gruppo, ricerca, analisi, scelta dello scatto migliore, pianificazione, formati;
+- test unitari sulla logica: regole di sicurezza, piano di eliminazione, sessioni e scelte di gruppo, ricerca, analisi, scelta dello scatto migliore, selezione nella griglia e stelle, pianificazione, formati;
 - prova d'uso automatica sul simulatore, con una schermata salvata a ogni passo:
   - introduzione, permesso per Foto, analisi completa fino al termine, swipe e pulsanti, annullamento, dettagli, revisione, conferma, eliminazione reale di due foto di prova ed esito;
-  - foto simili: il workflow aggiunge al simulatore tre scatti della stessa scena (nitido, sfocato, scuro) e l'app deve riconoscerli come gruppo, consigliare quello nitido, mostrare il confronto con lo zoom condiviso e applicare «Tieni solo la migliore»; nello swipe deve comparire la striscia con tutti gli scatti, «Tieni la migliore» deve chiudere il gruppo e un solo annullamento deve ripristinarlo;
+  - foto simili: il workflow aggiunge al simulatore tre scatti della stessa scena (nitido, sfocato, scuro) e l'app deve riconoscerli come gruppo e consigliare quello nitido; nello swipe deve comparire la striscia con tutti gli scatti, «Tieni la migliore» deve chiudere il gruppo e un solo annullamento deve ripristinarlo;
+  - griglia del gruppo: trascinando il dito sulla prima riga si selezionano le tre foto, i tocchi deselezionano, la stella resta sulla foto scelta e si ritrova in Esplora, «Tieni solo la tua migliore» chiude il gruppo; nel confronto i pulsanti stanno sopra il bordo inferiore e il contatore sotto la barra del titolo; nella griglia di una categoria «Seleziona» e un trascinamento selezionano tre elementi;
   - video: un video di prova deve riprodursi dentro la carta e mettersi in pausa con un tocco; con due riprese quasi uguali, toccando l'altra nella striscia deve passare sulla carta e partire, e «Tieni solo questo» deve chiudere il gruppo;
   - un giro di tutte le altre schermate.
 
@@ -147,7 +148,10 @@ Gli elementi protetti (preferiti, foto nascoste, album, cartelle e periodi scelt
 
 ### Foto simili e scelta dello scatto migliore
 
-Quando una foto ha degli scatti simili, l'app li mostra tutti: nella modalità swipe compare una striscia con l'intero gruppo, e il confronto apre le foto una accanto all'altra.
+Quando una foto ha degli scatti simili, l'app li mostra tutti: nella modalità swipe compare una striscia con l'intero gruppo, la griglia li mette tutti insieme in miniatura e il confronto li apre in grande uno dopo l'altro.
+
+- **Griglia con selezione rapida.** Come nell'app Foto: un tocco seleziona, trascinando il dito in orizzontale si selezionano tutte le anteprime toccate (anche su più righe, con lo scorrimento automatico vicino ai bordi), partendo da una già selezionata si deseleziona. Tenendo premuta un'anteprima la si vede in grande. Scelte rapide: tutte, tutte tranne le migliori, nessuna. La stessa selezione a trascinamento c'è nelle griglie delle categorie, dopo «Seleziona».
+- **Le tue migliori.** Si possono segnare una o più foto con una stella: restano conservate e la stella si vede ovunque (striscia, carta, confronto, griglie). Le stelle prevalgono sul consiglio dell'app: «Tieni solo le tue migliori» conserva quelle con la stella e propone le altre. Il consiglio dell'app è indicato a parte, con le scintille.
 
 - **Raggruppamento.** Raffiche (riconosciute da iOS) e scatti ravvicinati nel tempo, confrontati con le impronte visive di Vision. Se Vision non riesce a produrre l'impronta si ripiega sull'hash percettivo delle anteprime.
 - **Criteri.** Per ogni membro di un gruppo `ShotAnalyzer` misura: nitidezza dell'intera immagine, nitidezza del soggetto (il volto più grande, altrimenti il centro), qualità dei volti secondo Vision, occhi chiusi e sorrisi, giudizio estetico dove iOS lo mette a disposizione. A questi si aggiungono esposizione e risoluzione.
@@ -159,6 +163,7 @@ Quando una foto ha degli scatti simili, l'app li mostra tutti: nella modalità s
 ### Anteprime nitide e video
 
 - Con Foto di iCloud e «Ottimizza spazio iPhone» sul dispositivo resta spesso solo un'anteprima a bassa qualità. L'app mostra subito quella e poi la versione nitida, scaricandola da iCloud se la rete lo consente (rispettando «solo con Wi‑Fi»). Se il download non è consentito lo dice e offre di scaricarla comunque: non resta mai una foto sfocata senza spiegazione.
+- Nel confronto, a tutto schermo e nell'anteprima tenendo premuto, la foto che si sta esaminando arriva nitida anche con la rete cellulare: una alla volta, mai con Dati ridotti attivo, e si può spegnere nelle Impostazioni.
 - I video si riproducono dentro la carta, senza audio finché non lo si attiva: un tocco mette in pausa, la barra permette di spostarsi, i fotogrammi in basso mostrano i momenti principali, c'è la velocità doppia.
 - Le immagini delle carte successive vengono preparate in anticipo.
 

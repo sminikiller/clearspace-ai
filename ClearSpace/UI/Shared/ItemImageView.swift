@@ -42,8 +42,13 @@ final class DisplayImageLoader {
         attempt += 1
     }
 
-    func load(item: IndexedItem, pixelSide: CGFloat, env: AppEnvironment) async {
-        let allowNetwork = env.canDownloadForViewing || (forcesNetwork && env.conditions.isOnline)
+    /// - Parameter inspecting: l'utente sta guardando proprio questa foto per giudicarla (confronto,
+    ///   tutto schermo, anteprima tenendo premuto): la versione nitida si scarica anche con la rete
+    ///   cellulare, se le impostazioni lo consentono.
+    func load(item: IndexedItem, pixelSide: CGFloat, env: AppEnvironment, inspecting: Bool = false) async {
+        let allowNetwork = env.canDownloadForViewing
+            || (inspecting && env.canDownloadForInspection)
+            || (forcesNetwork && env.conditions.isOnline)
         // L'immagine precedente resta visibile finché non arriva la nuova: nel confronto tra foto simili
         // il passaggio da una all'altra deve essere immediato, senza schermate vuote.
         setPhase(.loading)
@@ -159,15 +164,21 @@ struct ImageLoadStatusView: View {
         }
     }
 
+    /// Avviso a pillola. Il bordo chiaro lo separa dal fondo nero quando la foto è più stretta del riquadro.
     private func pill<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         HStack(spacing: 8) {
             content()
         }
         .font(.caption.weight(.semibold))
         .foregroundStyle(.white)
+        .multilineTextAlignment(.center)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.black.opacity(0.65), in: Capsule())
+        .background(.black.opacity(0.75), in: Capsule())
+        .overlay {
+            Capsule()
+                .strokeBorder(.white.opacity(0.3), lineWidth: 1)
+        }
     }
 }
 
@@ -181,6 +192,9 @@ struct ItemImageView: View {
     var pan: CGSize = .zero
     /// Mostra gli avvisi sullo stato del caricamento.
     var showsStatus = true
+    /// L'utente la sta esaminando: la versione nitida arriva anche con la rete cellulare (vedi
+    /// `DisplayImageLoader.load`).
+    var inspecting = false
 
     @Environment(AppEnvironment.self) private var env
     @State private var loader = DisplayImageLoader()
@@ -219,7 +233,7 @@ struct ItemImageView: View {
             }
         }
         .task(id: LoadKey(id: item.id, attempt: loader.attempt)) {
-            await loader.load(item: item, pixelSide: pixelSide, env: env)
+            await loader.load(item: item, pixelSide: pixelSide, env: env, inspecting: inspecting)
         }
     }
 }

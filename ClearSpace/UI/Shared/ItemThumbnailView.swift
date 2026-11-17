@@ -83,6 +83,13 @@ struct ItemTile: View {
             }
             .overlay(alignment: .topLeading) {
                 HStack(spacing: 3) {
+                    if item.isStarred {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(Theme.best)
+                            .frame(width: 20, height: 20)
+                            .background(.black.opacity(0.6), in: Circle())
+                    }
                     if isProtected {
                         badge("lock.fill", tint: .gray)
                     }
@@ -130,6 +137,7 @@ struct ItemTile: View {
 
     private var accessibilityDescription: String {
         var parts = [item.kindDescription, Format.date(item.createdAt), Format.bytesOrUnknown(item.estimatedBytes)]
+        if item.isStarred { parts.append("con la stella") }
         if isProtected { parts.append("protetto") }
         if item.traits.contains(.cloudOnly) { parts.append("solo su iCloud") }
         if item.reviewStatus != .unreviewed { parts.append(item.reviewStatus.title) }

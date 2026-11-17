@@ -234,6 +234,9 @@ struct IndexedItem: Identifiable, Codable, Hashable, Sendable {
     /// L'utente ha sbloccato esplicitamente una protezione automatica (es. preferito).
     var protectionOverride: Bool
     var decidedAt: Date?
+    /// Quando l'utente ha segnato l'elemento come uno dei migliori del suo gruppo (la stella).
+    /// Facoltativo: gli indici salvati dalle versioni precedenti si leggono senza problemi.
+    var starredAt: Date?
 
     init(
         id: UUID = UUID(),
@@ -286,6 +289,7 @@ struct IndexedItem: Identifiable, Codable, Hashable, Sendable {
         self.isProtected = false
         self.protectionOverride = false
         self.decidedAt = nil
+        self.starredAt = nil
     }
 }
 
@@ -308,6 +312,19 @@ extension IndexedItem {
     /// Non ancora deciso: mai visto oppure rimandato.
     var isPendingReview: Bool {
         reviewStatus == .unreviewed || reviewStatus == .postponed
+    }
+
+    /// Scelto dall'utente come uno dei migliori: mostrato con una stella e conservato.
+    var isStarred: Bool { starredAt != nil }
+
+    /// Cambia la decisione dell'utente. La stella vale solo per ciò che si conserva: con qualsiasi
+    /// altra decisione (proporre per l'eliminazione, rimandare, tornare da decidere) viene tolta.
+    mutating func setReviewStatus(_ status: ReviewStatus, at date: Date) {
+        reviewStatus = status
+        decidedAt = status == .unreviewed ? nil : date
+        if status != .kept {
+            starredAt = nil
+        }
     }
 
     /// Contenuto potenzialmente importante: richiede una revisione più attenta.

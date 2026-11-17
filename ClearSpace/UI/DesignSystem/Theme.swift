@@ -10,6 +10,9 @@ enum Theme {
     static let remove = Color.red
     static let later = Color.orange
     static let info = Color.blue
+    /// Stella delle «migliori» scelte dall'utente. Si usa su fondo scuro o accanto a un testo,
+    /// mai come unico colore di un testo su fondo chiaro.
+    static let best = Color.yellow
 
     static let background = Color(uiColor: .systemGroupedBackground)
     static let cardBackground = Color(uiColor: .secondarySystemGroupedBackground)

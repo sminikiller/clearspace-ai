@@ -22,6 +22,8 @@ private struct ReviewRecord: Codable {
     let isProtected: Bool
     let protectionOverride: Bool
     let decidedAt: Date?
+    /// Stella dell'utente. Facoltativa: i file salvati dalle versioni precedenti restano leggibili.
+    let starredAt: Date?
 }
 
 /// Indice locale degli elementi: metadati, risultati delle analisi, gruppi e decisioni.
@@ -371,8 +373,7 @@ final class IndexStore {
         guard !ids.isEmpty else { return }
         for id in ids {
             guard var item = itemsByID[id] else { continue }
-            item.reviewStatus = status
-            item.decidedAt = status == .unreviewed ? nil : date
+            item.setReviewStatus(status, at: date)
             itemsByID[id] = item
             if status.isQueuedForDeletion {
                 markedIDs.insert(id)
@@ -381,6 +382,21 @@ final class IndexStore {
             }
         }
         markedCount = markedIDs.count
+        didChange(index: false, review: true, immediate: true)
+    }
+
+    /// Mette o toglie la stella dei «migliori». Non cambia la decisione: chi mette la stella
+    /// conserva prima l'elemento (vedi `SessionManager.markBest`), così la stella resta valida.
+    func setStarred(_ isStarred: Bool, for ids: [UUID], at date: Date = Date()) {
+        var changed = false
+        for id in ids {
+            guard var item = itemsByID[id], item.isStarred != isStarred else { continue }
+            if isStarred && item.reviewStatus != .kept { continue }
+            item.starredAt = isStarred ? date : nil
+            itemsByID[id] = item
+            changed = true
+        }
+        guard changed else { return }
         didChange(index: false, review: true, immediate: true)
     }
 
@@ -492,6 +508,7 @@ final class IndexStore {
                 item.isProtected = false
                 item.protectionOverride = false
                 item.decidedAt = nil
+                item.starredAt = nil
                 itemsByID[item.id] = item
                 idBySourceKey[Self.sourceKey(item.source, item.sourceIdentifier)] = item.id
             }
@@ -525,6 +542,7 @@ final class IndexStore {
         item.isProtected = record.isProtected
         item.protectionOverride = record.protectionOverride
         item.decidedAt = record.decidedAt
+        item.starredAt = record.status == .kept ? record.starredAt : nil
         itemsByID[id] = item
         if record.status.isQueuedForDeletion {
             markedIDs.insert(id)
@@ -536,6 +554,7 @@ final class IndexStore {
     /// Decisione da salvare per un elemento, oppure `nil` se è ancora nello stato iniziale.
     private func reviewRecord(for item: IndexedItem) -> ReviewRecord? {
         let isDefault = item.reviewStatus == .unreviewed && !item.isProtected && !item.protectionOverride
+            && !item.isStarred
         guard !isDefault else { return nil }
         return ReviewRecord(
             id: item.id,
@@ -543,7 +562,8 @@ final class IndexStore {
             status: item.reviewStatus,
             isProtected: item.isProtected,
             protectionOverride: item.protectionOverride,
-            decidedAt: item.decidedAt
+            decidedAt: item.decidedAt,
+            starredAt: item.starredAt
         )
     }
 

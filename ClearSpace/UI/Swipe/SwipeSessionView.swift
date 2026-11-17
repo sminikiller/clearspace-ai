@@ -18,6 +18,7 @@ struct SwipeSessionView: View {
     @State private var detailItem: IndexedItem?
     @State private var previewItem: IndexedItem?
     @State private var comparison: ComparisonTarget?
+    @State private var gallery: GalleryTarget?
     @State private var toast: String?
     @State private var feedbackTrigger = 0
     @State private var markTrigger = 0
@@ -28,6 +29,13 @@ struct SwipeSessionView: View {
     private struct ComparisonTarget: Identifiable {
         let groupID: UUID
         let itemID: UUID
+
+        var id: UUID { groupID }
+    }
+
+    /// Galleria del gruppo da aprire, con la selezione multipla.
+    private struct GalleryTarget: Identifiable {
+        let groupID: UUID
 
         var id: UUID { groupID }
     }
@@ -74,6 +82,18 @@ struct SwipeSessionView: View {
                         }
                     }
                 }
+            }
+        }
+        .sheet(item: $gallery) { target in
+            NavigationStack {
+                GroupSelectionView(groupID: target.groupID, closesAfterDecision: true)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Chiudi") {
+                                gallery = nil
+                            }
+                        }
+                    }
             }
         }
         .toast($toast)
@@ -124,12 +144,16 @@ struct SwipeSessionView: View {
                             members: env.store.members(of: group),
                             currentID: item.id,
                             onSelect: { memberID in select(memberID) },
+                            onOpenGrid: {
+                                gallery = GalleryTarget(groupID: group.id)
+                            },
                             onCompare: {
                                 comparison = ComparisonTarget(groupID: group.id, itemID: item.id)
                             },
                             onKeepBest: { keepBest(of: group) },
                             onKeepOnlyCurrent: { keepOnly(item, in: group) },
-                            onDecide: { memberID, choice in decideMember(memberID, choice) }
+                            onDecide: { memberID, choice in decideMember(memberID, choice) },
+                            onToggleBest: { memberID in toggleBest(memberID) }
                         )
                     }
                     SwipeActionBar(
@@ -178,7 +202,7 @@ struct SwipeSessionView: View {
                 group: group,
                 // Un video scelto dalla striscia parte subito: è stato toccato proprio per guardarlo.
                 autoplaysVideo: sessions.active?.focusedItemID == item.id,
-                isSuspended: comparison != nil || previewItem != nil || detailItem != nil,
+                isSuspended: comparison != nil || gallery != nil || previewItem != nil || detailItem != nil,
                 onExpand: { previewItem = item }
             )
                 .overlay {
@@ -294,21 +318,29 @@ struct SwipeSessionView: View {
         feedbackTrigger += 1
     }
 
-    /// Conserva lo scatto consigliato del gruppo e propone gli altri per l'eliminazione, in un solo gesto.
+    /// Conserva le migliori del gruppo (quelle con la stella o, se non ce ne sono, quella consigliata)
+    /// e propone le altre per l'eliminazione, in un solo gesto.
     /// Come ogni scelta, passa dalla revisione: nulla viene eliminato qui.
     private func keepBest(of group: ItemGroup) {
-        guard let keepID = group.suggestedKeepID else { return }
-        keepOnly(keepID, in: group, summary: "Tenuto l'elemento consigliato")
+        let members = env.store.members(of: group)
+        let keepers = GroupChoice.preferredKeepers(members: members, suggestedID: group.suggestedKeepID)
+        guard !keepers.isEmpty else { return }
+        let usesStars = members.contains { $0.isStarred }
+        let masculine = members.first?.usesMasculineWording ?? false
+        let summary = usesStars
+            ? (masculine ? "Tenuti i tuoi migliori" : "Tenute le tue migliori")
+            : "Tenuto l'elemento consigliato"
+        keepOnly(keepers, in: group, summary: summary)
     }
 
     /// Conserva l'elemento sulla carta e propone tutti gli altri del gruppo per l'eliminazione.
     private func keepOnly(_ item: IndexedItem, in group: ItemGroup) {
-        keepOnly(item.id, in: group, summary: "Tenuto quello sulla carta")
+        keepOnly([item.id], in: group, summary: "Tenuto quello sulla carta")
     }
 
-    private func keepOnly(_ keepID: UUID, in group: ItemGroup, summary: String) {
-        let others = group.memberIDs.filter { $0 != keepID }
-        let result = sessions.decideGroup(keep: [keepID], delete: others)
+    private func keepOnly(_ keepers: Set<UUID>, in group: ItemGroup, summary: String) {
+        let choice = GroupChoice.keepOnly(keepers, among: group.memberIDs)
+        let result = sessions.decideGroup(keep: choice.keep, delete: choice.delete)
         markTrigger += 1
         var message = "\(summary): \(Format.plural(result.applied, "altro aggiunto", "altri aggiunti")) alla revisione."
         if result.blocked > 0 {
@@ -330,6 +362,21 @@ struct SwipeSessionView: View {
             sessions.decideGroup(keep: [memberID], delete: [])
             feedbackTrigger += 1
         }
+    }
+
+    /// Mette o toglie la stella dei migliori dal menu della striscia. Con la stella l'elemento è conservato.
+    private func toggleBest(_ memberID: UUID) {
+        guard let member = env.store.item(memberID) else { return }
+        if member.isStarred {
+            sessions.removeBest([memberID])
+            toast = "Stella tolta."
+        } else {
+            sessions.markBest([memberID])
+            toast = member.usesMasculineWording
+                ? "Segnato come migliore: resta conservato."
+                : "Segnata come migliore: resta conservata."
+        }
+        feedbackTrigger += 1
     }
 
     private func openReview() {

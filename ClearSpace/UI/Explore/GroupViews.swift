@@ -33,8 +33,10 @@ struct GroupListView: View {
                 )
             }
             ForEach(entries) { entry in
+                // Si apre la galleria del gruppo: tutte le anteprime insieme, con la selezione multipla.
+                // Da lì «Confronta» mostra le foto in grande una accanto all'altra.
                 NavigationLink {
-                    GroupComparisonView(groupID: entry.group.id)
+                    GroupSelectionView(groupID: entry.group.id)
                 } label: {
                     GroupRow(entry: entry)
                 }
@@ -134,6 +136,12 @@ private struct GroupRow: View {
                 Text("\(entry.members.count) elementi · \(Format.bytes(entry.potentialBytes)) potenziali")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if entry.members.contains(where: { $0.isStarred }) {
+                    Image(systemName: "star.fill")
+                        .font(.caption)
+                        .foregroundStyle(Theme.best)
+                        .accessibilityLabel("con le tue migliori")
+                }
             }
             if let note = entry.group.note {
                 Text(note)

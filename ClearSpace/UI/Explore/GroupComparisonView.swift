@@ -15,15 +15,21 @@ struct CompareViewport: Equatable {
 /// Confronto degli scatti di un gruppo di simili o duplicati.
 ///
 /// In alto la foto selezionata, grande e ingrandibile; sotto, tutte le foto del gruppo con il voto
-/// di ciascuna. Lo scatto consigliato è indicato insieme ai motivi (nitidezza, volti, occhi aperti,
-/// esposizione, risoluzione), ma la scelta resta all'utente: si può tenere la migliore, quella
-/// selezionata oppure tutte. Ogni scelta passa dalla revisione: da qui non si elimina nulla.
+/// di ciascuna, il consiglio e i motivi (nitidezza, volti, occhi aperti, esposizione, risoluzione).
+/// In fondo, sempre visibili, le scelte sull'intero gruppo. La scelta resta all'utente: può segnare
+/// con una stella le sue migliori, tenere quella consigliata, quella selezionata oppure tutte.
+/// Ogni scelta passa dalla revisione: da qui non si elimina nulla.
+///
+/// La schermata non deve mai essere più alta dello spazio disponibile: la foto prende ciò che
+/// resta, i dettagli scorrono in un riquadro limitato e i pulsanti stanno sopra il bordo inferiore.
 struct GroupComparisonView: View {
     let groupID: UUID
     /// Foto da mostrare all'apertura; senza indicazione si parte da quella consigliata.
     var initialItemID: UUID?
     /// Chiude il confronto dopo una scelta sull'intero gruppo (usato dalla modalità swipe).
     var closesAfterDecision = false
+    /// Mostra il pulsante della galleria. È spento quando il confronto è aperto dalla galleria.
+    var showsGalleryButton = true
 
     @Environment(AppEnvironment.self) private var env
     @Environment(\.dismiss) private var dismiss
@@ -31,6 +37,9 @@ struct GroupComparisonView: View {
     @State private var viewport = CompareViewport()
     @State private var isRefining = false
     @State private var toast: String?
+    @State private var showsGallery = false
+    /// Altezza naturale dei dettagli sotto la foto: serve a non dar loro più spazio del necessario.
+    @State private var detailsHeight: CGFloat = 240
 
     var body: some View {
         let _ = env.store.revision
@@ -49,6 +58,33 @@ struct GroupComparisonView: View {
         .background(Theme.background)
         .navigationTitle("Confronto")
         .navigationBarTitleDisplayMode(.inline)
+        // Lo spazio della barra delle schede serve alla foto e ai pulsanti.
+        .toolbar(.hidden, for: .tabBar)
+        .toolbar {
+            if showsGalleryButton {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showsGallery = true
+                    } label: {
+                        Label("Griglia", systemImage: "square.grid.3x3")
+                    }
+                    .accessibilityHint("Mostra tutte le foto del gruppo in griglia, con la selezione multipla")
+                }
+            }
+        }
+        .sheet(isPresented: $showsGallery) {
+            NavigationStack {
+                GroupSelectionView(groupID: groupID, closesAfterDecision: true, opensComparison: false)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Chiudi") {
+                                showsGallery = false
+                            }
+                        }
+                    }
+            }
+            .environment(env)
+        }
         .toast($toast)
         .task(id: groupID) {
             if selectedID == nil {
@@ -76,18 +112,32 @@ struct GroupComparisonView: View {
         let ratings = QualityRanker.breakdowns(among: members)
         let selected = currentSelection(group: group, members: members)
         let position = (members.firstIndex(where: { $0.id == selected.id }) ?? 0) + 1
-        return VStack(spacing: 0) {
-            viewer(selected: selected, position: position, group: group, members: members)
-            VStack(alignment: .leading, spacing: 10) {
-                memberStrip(group: group, members: members, selected: selected, ratings: ratings)
-                verdict(group: group, members: members)
-                qualityChips(for: selected, rating: ratings[selected.id])
-                decisionRow(for: selected)
-                actions(group: group, members: members, selected: selected)
+        return GeometryReader { geometry in
+            VStack(spacing: 0) {
+                viewer(selected: selected, position: position, group: group, members: members)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 10) {
+                        memberStrip(group: group, members: members, selected: selected, ratings: ratings)
+                        verdict(group: group, members: members)
+                        qualityChips(for: selected, rating: ratings[selected.id])
+                        decisionRow(for: selected)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .onGeometryChange(for: CGFloat.self) { proxy in
+                        proxy.size.height
+                    } action: { height in
+                        detailsHeight = height
+                    }
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                // Al massimo metà dello spazio: la foto resta sempre grande abbastanza da giudicarla.
+                .frame(height: min(detailsHeight, max(geometry.size.height * 0.5, 120)))
             }
-            .padding(.horizontal, 14)
-            .padding(.top, 8)
-            .padding(.bottom, 12)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            actions(group: group, members: members, selected: selected)
         }
     }
 
@@ -121,8 +171,17 @@ struct GroupComparisonView: View {
         .overlay(alignment: .topLeading) {
             HStack(spacing: 6) {
                 viewerTag("\(position) di \(members.count)", systemImage: nil, tint: .black.opacity(0.6))
+                    .accessibilityIdentifier("compare.position")
+                if selected.isStarred {
+                    viewerTag(
+                        GroupWording.starred(masculine: selected.usesMasculineWording),
+                        systemImage: "star.fill",
+                        tint: .black.opacity(0.6),
+                        iconTint: Theme.best
+                    )
+                }
                 if selected.id == group.suggestedKeepID {
-                    viewerTag("Consigliata", systemImage: "star.fill", tint: Theme.keep)
+                    viewerTag(GroupWording.suggested(masculine: selected.usesMasculineWording), systemImage: "sparkles", tint: Theme.keep)
                 }
             }
             .padding(10)
@@ -142,10 +201,11 @@ struct GroupComparisonView: View {
         }
     }
 
-    private func viewerTag(_ text: String, systemImage: String?, tint: Color) -> some View {
+    private func viewerTag(_ text: String, systemImage: String?, tint: Color, iconTint: Color = .white) -> some View {
         HStack(spacing: 4) {
             if let systemImage {
                 Image(systemName: systemImage)
+                    .foregroundStyle(iconTint)
                     .accessibilityHidden(true)
             }
             Text(text)
@@ -200,8 +260,15 @@ struct GroupComparisonView: View {
             .frame(width: 64, height: 64)
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay(alignment: .topTrailing) {
-                if isSuggested {
-                    stripBadge("star.fill", tint: Theme.keep)
+                if member.isStarred {
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(Theme.best)
+                        .frame(width: 18, height: 18)
+                        .background(.black.opacity(0.6), in: Circle())
+                        .padding(3)
+                } else if isSuggested {
+                    stripBadge("sparkles", tint: Theme.keep)
                 }
             }
             .overlay(alignment: .topLeading) {
@@ -248,8 +315,10 @@ struct GroupComparisonView: View {
         group: ItemGroup,
         ratings: [UUID: QualityRanker.Breakdown]
     ) -> String {
-        var parts = ["Foto \(position)"]
-        if member.id == group.suggestedKeepID { parts.append("consigliata") }
+        let masculine = member.usesMasculineWording
+        var parts = ["\(member.isVideo ? "Video" : member.isImage ? "Foto" : "Elemento") \(position)"]
+        if member.isStarred { parts.append(GroupWording.starred(masculine: masculine).lowercased()) }
+        if member.id == group.suggestedKeepID { parts.append(GroupWording.suggested(masculine: masculine).lowercased()) }
         if let rating = ratings[member.id], member.isImage { parts.append("voto \(rating.grade) su 100") }
         if member.reviewStatus != .unreviewed { parts.append(member.reviewStatus.title) }
         return parts.joined(separator: ", ")
@@ -262,7 +331,7 @@ struct GroupComparisonView: View {
             if let keepID = group.suggestedKeepID,
                let index = members.firstIndex(where: { $0.id == keepID }),
                let reason = group.suggestionReason {
-                Text(QualityRanker.sentence(position: index + 1, noun: noun(for: members[index]), reason: reason))
+                Text(QualityRanker.sentence(position: index + 1, noun: members[index].definiteNoun, reason: reason))
                     .font(.subheadline.weight(.semibold))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -309,40 +378,60 @@ struct GroupComparisonView: View {
 
     // MARK: - Scelte
 
-    @ViewBuilder
+    /// Decisione sull'elemento selezionato, più la stella per segnarlo tra i migliori.
     private func decisionRow(for member: IndexedItem) -> some View {
-        if let reason = env.safety.blockReason(for: member) {
-            Label("Protetta: \(reason.message)", systemImage: "lock.fill")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        } else {
-            // "questo" per video e file, "questa" per le foto.
-            let masculine = !member.isImage
-            Picker("Decisione per l'elemento selezionato", selection: decisionBinding(for: member)) {
-                Text(masculine ? "Tieni questo" : "Tieni questa").tag(false)
-                Text(masculine ? "Elimina questo" : "Elimina questa").tag(true)
+        HStack(spacing: 8) {
+            if let reason = env.safety.blockReason(for: member) {
+                Label("Protetta: \(reason.message)", systemImage: "lock.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                // "questo" per video e file, "questa" per le foto.
+                let masculine = member.usesMasculineWording
+                Picker("Decisione per l'elemento selezionato", selection: decisionBinding(for: member)) {
+                    Text(masculine ? "Tieni questo" : "Tieni questa").tag(false)
+                    Text(masculine ? "Elimina questo" : "Elimina questa").tag(true)
+                }
+                .pickerStyle(.segmented)
             }
-            .pickerStyle(.segmented)
+            Button {
+                toggleStar(member)
+            } label: {
+                Image(systemName: member.isStarred ? "star.fill" : "star")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(member.isStarred ? Theme.best : Color.secondary)
+                    .frame(width: 46, height: 32)
+                    .background(Theme.placeholder, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(member.isStarred ? "Togli la stella" : "Segna come migliore")
+            .accessibilityIdentifier("compare.star")
         }
     }
 
     private func actions(group: ItemGroup, members: [IndexedItem], selected: IndexedItem) -> some View {
-        let masculine = !selected.isImage
+        let masculine = selected.usesMasculineWording
+        let keepers = GroupChoice.preferredKeepers(members: members, suggestedID: group.suggestedKeepID)
+        let starredCount = members.filter { $0.isStarred }.count
         return VStack(spacing: 8) {
-            if let keepID = group.suggestedKeepID {
+            if !keepers.isEmpty && keepers.count < members.count {
                 Button {
-                    keepOnly(keepID, in: group)
+                    keepOnly(keepers, in: group)
                 } label: {
-                    Text(masculine ? "Tieni solo il migliore" : "Tieni solo la migliore")
-                        .frame(maxWidth: .infinity)
+                    Label(
+                        GroupWording.keepBest(starredCount: starredCount, masculine: masculine),
+                        systemImage: starredCount > 0 ? "star.fill" : "sparkles"
+                    )
+                    .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Theme.keep)
             }
             HStack(spacing: 8) {
-                if selected.id != group.suggestedKeepID {
+                if keepers != [selected.id] {
                     Button {
-                        keepOnly(selected.id, in: group)
+                        keepOnly([selected.id], in: group)
                     } label: {
                         Text(masculine ? "Tieni solo questo" : "Tieni solo questa")
                             .frame(maxWidth: .infinity)
@@ -359,6 +448,10 @@ struct GroupComparisonView: View {
             }
         }
         .controlSize(.large)
+        .padding(.horizontal, 14)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+        .background(.bar)
     }
 
     /// `true` = proposta per l'eliminazione, `false` = conservata.
@@ -375,9 +468,21 @@ struct GroupComparisonView: View {
         )
     }
 
-    private func keepOnly(_ keepID: UUID, in group: ItemGroup) {
-        let others = group.memberIDs.filter { $0 != keepID }
-        let result = env.sessions.decideGroup(keep: [keepID], delete: others)
+    private func toggleStar(_ member: IndexedItem) {
+        if member.isStarred {
+            env.sessions.removeBest([member.id])
+            toast = "Stella tolta."
+        } else {
+            env.sessions.markBest([member.id])
+            toast = member.usesMasculineWording
+                ? "Segnato come migliore: resta conservato."
+                : "Segnata come migliore: resta conservata."
+        }
+    }
+
+    private func keepOnly(_ keepers: Set<UUID>, in group: ItemGroup) {
+        let choice = GroupChoice.keepOnly(keepers, among: group.memberIDs)
+        let result = env.sessions.decideGroup(keep: choice.keep, delete: choice.delete)
         var message = "\(Format.plural(result.applied, "elemento aggiunto", "elementi aggiunti")) alla revisione."
         if result.blocked > 0 {
             message += " \(Format.plural(result.blocked, "protetto saltato", "protetti saltati"))."
@@ -395,15 +500,6 @@ struct GroupComparisonView: View {
             dismiss()
         } else {
             toast = message
-        }
-    }
-
-    private func noun(for item: IndexedItem) -> String {
-        switch item.category {
-        case .photo: return "la foto"
-        case .video: return "il video"
-        case .audio: return "la registrazione"
-        case .pdf, .office, .archive, .otherDocument, .unknown: return "il file"
         }
     }
 }
@@ -433,7 +529,14 @@ struct CompareViewer: View {
             } else {
                 Group {
                     if item.isImage {
-                        ItemImageView(item: item, pixelSide: 3_000, zoom: viewport.scale, pan: viewport.offset)
+                        // Qui si giudica la nitidezza: la versione nitida arriva anche con la rete cellulare.
+                        ItemImageView(
+                            item: item,
+                            pixelSide: 3_000,
+                            zoom: viewport.scale,
+                            pan: viewport.offset,
+                            inspecting: true
+                        )
                     } else {
                         ItemThumbnailView(item: item, pointSide: 430, fill: false, allowsNetwork: true)
                             .scaleEffect(viewport.scale)
@@ -451,7 +554,7 @@ struct CompareViewer: View {
             }
         }
         .clipped()
-        .frame(minHeight: 200)
+        .frame(minHeight: 160)
     }
 
     private func magnifyGesture(in size: CGSize) -> some Gesture {

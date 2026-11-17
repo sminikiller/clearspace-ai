@@ -130,6 +130,26 @@ final class SmokeTests: XCTestCase {
         pause(1)
     }
 
+    /// Aspetta che l'etichetta di un elemento diventi esattamente quella attesa.
+    private func waitForLabel(_ element: XCUIElement, _ expected: String, timeout: TimeInterval) -> Bool {
+        let predicate = NSPredicate(format: "label == %@", expected)
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
+        return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
+    }
+
+    /// Cella della griglia in una certa posizione (0 = la prima in alto a sinistra).
+    private func gridCell(_ index: Int) -> XCUIElement {
+        app.descendants(matching: .any)["grid.cell.\(index)"]
+    }
+
+    /// Trascina il dito in orizzontale dalla cella `from` alla cella `to`, come per selezionare
+    /// più foto insieme nell'app Foto.
+    private func dragAcrossGrid(from: Int, to: Int) {
+        let start = gridCell(from).coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5))
+        let end = gridCell(to).coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.5))
+        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.2)
+    }
+
     /// Titolo della schermata in primo piano: serve a capire se un tocco ne ha aperta un'altra.
     private var currentTitle: String {
         let bar = app.navigationBars.firstMatch
@@ -188,7 +208,20 @@ final class SmokeTests: XCTestCase {
         capture("40-foto-simili")
         groupRow.tap()
 
+        // Galleria del gruppo: tutte le anteprime insieme, con la stella messa durante lo swipe
+        let counter = app.staticTexts["grid.selectionCount"]
+        XCTAssertTrue(counter.waitForExistence(timeout: 10), "La galleria del gruppo non si è aperta")
+        XCTAssertTrue(
+            element(containing: "la tua migliore").waitForExistence(timeout: 5),
+            "La stella messa nello swipe non si ritrova nella galleria"
+        )
+        pause(2)
+        capture("40b-galleria-del-gruppo")
+
         // Confronto: tutte le foto del gruppo, lo scatto consigliato e il motivo
+        let compare = app.buttons["Confronta"].firstMatch
+        XCTAssertTrue(compare.waitForExistence(timeout: 5), "Nella galleria manca il pulsante Confronta")
+        compare.tap()
         XCTAssertTrue(app.navigationBars["Confronto"].waitForExistence(timeout: 10), "Il confronto non si è aperto")
         XCTAssertTrue(
             element(startingWith: "Conserva la foto").waitForExistence(timeout: 30),
@@ -196,6 +229,7 @@ final class SmokeTests: XCTestCase {
         )
         pause(3)
         capture("41-confronto")
+        checkComparisonLayout()
 
         // Zoom condiviso: si ingrandisce una foto e si passa a un'altra restando sullo stesso punto
         let window = app.windows.firstMatch
@@ -215,9 +249,10 @@ final class SmokeTests: XCTestCase {
             capture("44-confronto-zoom-terza-foto")
         }
 
-        // Tieni solo la migliore: le altre passano alla revisione, nulla viene eliminato
-        let keepBest = app.buttons["Tieni solo la migliore"]
-        XCTAssertTrue(keepBest.waitForExistence(timeout: 5), "Manca il pulsante per tenere la migliore")
+        // Tieni solo la tua migliore (quella con la stella): le altre passano alla revisione,
+        // nulla viene eliminato
+        let keepBest = app.buttons["Tieni solo la tua migliore"]
+        XCTAssertTrue(keepBest.waitForExistence(timeout: 5), "Manca il pulsante per tenere la foto con la stella")
         keepBest.tap()
         XCTAssertTrue(
             element(containing: "alla revisione").waitForExistence(timeout: 6),
@@ -233,6 +268,8 @@ final class SmokeTests: XCTestCase {
             element(containing: "sono stati conservati").waitForExistence(timeout: 6),
             "Le foto non sono state riportate tra quelle conservate"
         )
+        // Confronto → galleria → gruppi → categorie delle foto → Esplora
+        goBack()
         goBack()
         goBack()
         goBack()
@@ -418,8 +455,164 @@ final class SmokeTests: XCTestCase {
         } else {
             XCTFail("Manca il pulsante per annullare la scelta sul gruppo")
         }
+
+        reviewSimilarShotsInGrid()
         app.buttons["Chiudi"].firstMatch.tap()
         pause(1)
+    }
+
+    /// Dalla striscia sotto la carta apre la griglia del gruppo: selezione trascinando il dito,
+    /// tocchi per deselezionare, stella sulla migliore, «Tieni solo la tua migliore» e annullamento.
+    /// Alla fine la foto con la stella resta conservata e le altre due tornano da decidere.
+    private func reviewSimilarShotsInGrid() {
+        let gridButton = app.buttons["Griglia"]
+        guard gridButton.waitForExistence(timeout: 10) else {
+            capture("38a-striscia-senza-griglia")
+            XCTFail("Nella striscia manca il pulsante Griglia")
+            return
+        }
+        gridButton.tap()
+        let counter = app.staticTexts["grid.selectionCount"]
+        guard counter.waitForExistence(timeout: 10), gridCell(2).waitForExistence(timeout: 5) else {
+            capture("38a-griglia-non-aperta")
+            XCTFail("La griglia del gruppo non si è aperta con tutte le foto")
+            return
+        }
+        pause(1.5)
+        capture("38a-griglia")
+
+        // Trascinando il dito dalla prima alla terza anteprima si selezionano tutte e tre
+        dragAcrossGrid(from: 0, to: 2)
+        XCTAssertTrue(
+            waitForLabel(counter, "3 selezionate", timeout: 4),
+            "Il trascinamento non ha selezionato le tre foto (\(counter.label))"
+        )
+        pause(0.5)
+        capture("38b-griglia-trascinamento")
+
+        // Due tocchi deselezionano: resta solo la prima
+        gridCell(1).tap()
+        gridCell(2).tap()
+        XCTAssertTrue(
+            waitForLabel(counter, "1 selezionata", timeout: 4),
+            "I tocchi non hanno deselezionato le foto (\(counter.label))"
+        )
+
+        // La stella: la foto resta conservata e si riconosce
+        let star = app.buttons["Segna come migliori"]
+        guard star.waitForExistence(timeout: 5) else {
+            XCTFail("Nella griglia manca il pulsante per segnare la migliore")
+            return
+        }
+        star.tap()
+        XCTAssertTrue(
+            element(containing: "la tua migliore").waitForExistence(timeout: 5),
+            "La stella non compare sulla foto scelta"
+        )
+        pause(1)
+        capture("38c-griglia-stella")
+
+        // Tieni solo la tua migliore: le altre vanno in revisione e la griglia si chiude
+        let keepStarred = app.buttons["Tieni solo la tua migliore"]
+        guard keepStarred.waitForExistence(timeout: 5) else {
+            XCTFail("Manca il pulsante per tenere solo la foto con la stella")
+            return
+        }
+        keepStarred.tap()
+        XCTAssertTrue(
+            element(containing: "Sessione completata").waitForExistence(timeout: 10),
+            "La scelta fatta nella griglia non ha concluso la sessione"
+        )
+        pause(1)
+        capture("38d-griglia-scelta-fatta")
+
+        // Si annulla: le due foto senza stella tornano da decidere
+        let undo = app.buttons["Annulla l'ultima scelta"]
+        if undo.waitForExistence(timeout: 5) {
+            bringIntoView(undo)
+            undo.tap()
+            XCTAssertTrue(
+                app.buttons["Conserva"].waitForExistence(timeout: 10),
+                "L'annullamento non ha riportato le foto nella sessione"
+            )
+            pause(1)
+        } else {
+            XCTFail("Manca il pulsante per annullare la scelta fatta nella griglia")
+        }
+    }
+
+    /// Nel confronto i pulsanti devono stare sopra il bordo inferiore e il contatore sotto la barra
+    /// del titolo: prima finivano dietro la barra delle schede e dietro il pulsante per tornare indietro.
+    private func checkComparisonLayout() {
+        let window = app.windows.firstMatch.frame
+        let keepAll = app.buttons["Tieni tutte"]
+        guard keepAll.waitForExistence(timeout: 5) else {
+            XCTFail("Nel confronto manca il pulsante per tenerle tutte")
+            return
+        }
+        XCTAssertTrue(keepAll.isHittable, "«Tieni tutte» non si può toccare")
+        XCTAssertLessThanOrEqual(keepAll.frame.maxY, window.maxY - 16, "«Tieni tutte» esce dal bordo inferiore")
+        let tabBar = app.tabBars.firstMatch
+        if tabBar.exists && tabBar.isHittable {
+            XCTAssertFalse(tabBar.frame.intersects(keepAll.frame), "La barra delle schede copre i pulsanti del confronto")
+        }
+
+        let position = app.staticTexts.matching(NSPredicate(format: "label MATCHES %@", "^[0-9]+ di [0-9]+$")).firstMatch
+        let titleBar = app.navigationBars["Confronto"]
+        if position.waitForExistence(timeout: 3) && titleBar.exists {
+            XCTAssertGreaterThanOrEqual(
+                position.frame.minY,
+                titleBar.frame.maxY - 1,
+                "Il contatore delle foto finisce sotto la barra del titolo"
+            )
+        } else {
+            XCTFail("Nel confronto manca il contatore delle foto")
+        }
+    }
+
+    /// Selezione rapida nella griglia di una categoria: «Seleziona», poi un trascinamento orizzontale
+    /// sulla prima riga seleziona tre elementi in un gesto.
+    private func checkCategoryGridDragSelection() {
+        let photos = element(startingWith: "Foto")
+        guard photos.waitForExistence(timeout: 10) else {
+            XCTFail("Manca la sezione Foto")
+            return
+        }
+        photos.tap()
+        pause(1)
+        let allPhotos = element(startingWith: "Tutte le foto")
+        guard allPhotos.waitForExistence(timeout: 10) else {
+            XCTFail("Manca la categoria Tutte le foto")
+            goBack()
+            return
+        }
+        allPhotos.tap()
+        let select = app.buttons["Seleziona"]
+        guard select.waitForExistence(timeout: 15) else {
+            XCTFail("Nella griglia manca il pulsante Seleziona")
+            goBack()
+            goBack()
+            return
+        }
+        select.tap()
+        if gridCell(0).waitForExistence(timeout: 5) && gridCell(2).exists {
+            dragAcrossGrid(from: 0, to: 2)
+            XCTAssertTrue(
+                waitForLabel(app.staticTexts["grid.selectionCount"], "3 selezionati", timeout: 4),
+                "Il trascinamento nella griglia non ha selezionato tre elementi"
+            )
+            pause(0.5)
+            capture("24b-griglia-selezione-rapida")
+        } else {
+            XCTFail("Nella griglia mancano le anteprime")
+        }
+        let done = app.navigationBars.buttons["Fine"]
+        if done.exists {
+            done.tap()
+            pause(0.5)
+        }
+        goBack()
+        goBack()
     }
 
     // MARK: - Flusso principale: analisi, swipe, revisione, eliminazione confermata
@@ -579,6 +772,7 @@ final class SmokeTests: XCTestCase {
         // Esplora
         app.tabBars.buttons["Esplora"].tap()
         pause(1)
+        checkCategoryGridDragSelection()
 
         let search = element(startingWith: "Ricerca intelligente")
         if search.waitForExistence(timeout: 5) {
