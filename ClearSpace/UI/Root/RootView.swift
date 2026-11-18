@@ -48,6 +48,14 @@ struct RootView: View {
             OnboardingView()
                 .environment(env)
         }
+        .sheet(isPresented: whatsNewBinding) {
+            NavigationStack {
+                WhatsNewView(showsCloseButton: true) {
+                    markWhatsNewSeen()
+                }
+            }
+            .environment(env)
+        }
         .alert(
             "Importazione",
             isPresented: Binding(
@@ -87,9 +95,37 @@ struct RootView: View {
             get: { env.isReady && !env.preferences.values.hasCompletedOnboarding },
             set: { isPresented in
                 if !isPresented {
-                    env.preferences.update { $0.hasCompletedOnboarding = true }
+                    env.preferences.update {
+                        $0.hasCompletedOnboarding = true
+                        $0.lastSeenBuild = AppInfo.build
+                    }
                 }
             }
         )
+    }
+
+    /// Le novità compaiono una volta dopo un aggiornamento, mai al primo avvio (c'è già l'introduzione)
+    /// e mai sopra una sessione di pulizia.
+    private var whatsNewBinding: Binding<Bool> {
+        Binding(
+            get: {
+                let values = env.preferences.values
+                return env.isReady && AppInfo.shouldShowWhatsNew(
+                    hasCompletedOnboarding: values.hasCompletedOnboarding,
+                    lastSeenBuild: values.lastSeenBuild,
+                    currentBuild: AppInfo.build,
+                    isBusy: env.sessions.isPresentingSwipe
+                )
+            },
+            set: { isPresented in
+                if !isPresented {
+                    markWhatsNewSeen()
+                }
+            }
+        )
+    }
+
+    private func markWhatsNewSeen() {
+        env.preferences.update { $0.lastSeenBuild = AppInfo.build }
     }
 }

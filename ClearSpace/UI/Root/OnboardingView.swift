@@ -84,7 +84,7 @@ struct OnboardingView: View {
                         ProgressView()
                             .frame(maxWidth: .infinity)
                     } else {
-                        Text(env.photos.canRead ? "Inizia l'analisi" : "Consenti l'accesso a Foto")
+                        Text(primaryTitle)
                             .frame(maxWidth: .infinity)
                     }
                 }
@@ -101,19 +101,35 @@ struct OnboardingView: View {
         }
     }
 
+    /// Chi rivede l'introduzione dalle Impostazioni ha già una libreria analizzata: per lui l'ultimo
+    /// pulsante chiude e basta, senza far ripartire l'analisi.
+    private var isReplay: Bool {
+        !env.store.isEmpty
+    }
+
+    private var primaryTitle: String {
+        if !env.photos.canRead { return "Consenti l'accesso a Foto" }
+        return isReplay ? "Fine" : "Inizia l'analisi"
+    }
+
     private func requestAccess() {
         isRequesting = true
+        let startsScan = !isReplay
         Task {
             if !env.photos.canRead {
                 await env.photos.requestAccess()
             }
             isRequesting = false
-            finish(startScan: env.photos.canRead)
+            finish(startScan: startsScan && env.photos.canRead)
         }
     }
 
     private func finish(startScan: Bool) {
-        env.preferences.update { $0.hasCompletedOnboarding = true }
+        env.preferences.update {
+            $0.hasCompletedOnboarding = true
+            // Chi ha appena visto l'introduzione non ha bisogno anche delle novità.
+            $0.lastSeenBuild = AppInfo.build
+        }
         if startScan && !env.scan.isRunning {
             env.scan.start(deep: true)
         }

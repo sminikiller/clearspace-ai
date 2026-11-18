@@ -136,6 +136,9 @@ final class LayoutTests: UITestCase {
             checkLayout("L11-impostazioni-2")
             scroll(by: 0.45)
             checkLayout("L12-impostazioni-3")
+            visit(startingWith: "Informazioni su ClearSpace", name: "L12b-informazioni", scrolls: 2)
+            visit(startingWith: "Novità di questa versione", name: "L12c-novita", scrolls: 1)
+            visit(startingWith: "Guida rapida", name: "L12d-guida-rapida", scrolls: 2)
             closeTopScreen()
         } else {
             XCTFail("Home: manca il pulsante Impostazioni")

@@ -33,6 +33,7 @@ struct GroupComparisonView: View {
 
     @Environment(AppEnvironment.self) private var env
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var selectedID: UUID?
     @State private var viewport = CompareViewport()
     @State private var isRefining = false
@@ -434,6 +435,8 @@ struct GroupComparisonView: View {
                         keepOnly([selected.id], in: group)
                     } label: {
                         Text(masculine ? "Tieni solo questo" : "Tieni solo questa")
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
@@ -447,7 +450,8 @@ struct GroupComparisonView: View {
                 .buttonStyle(.bordered)
             }
         }
-        .controlSize(.large)
+        // Con il testo grande pulsanti più bassi: lo spazio serve alla foto e ai dettagli.
+        .controlSize(dynamicTypeSize > .large ? .regular : .large)
         .padding(.horizontal, 14)
         .padding(.top, 10)
         .padding(.bottom, 8)

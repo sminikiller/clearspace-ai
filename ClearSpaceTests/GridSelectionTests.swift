@@ -140,3 +140,25 @@ final class GridSelectionTests: XCTestCase {
         XCTAssertFalse(decoded.isStarred)
     }
 }
+
+/// Quando compaiono le novità della versione.
+final class WhatsNewTests: XCTestCase {
+
+    func testNewsAppearOnceAfterAnUpdate() {
+        XCTAssertTrue(AppInfo.shouldShowWhatsNew(hasCompletedOnboarding: true, lastSeenBuild: "7", currentBuild: "8", isBusy: false))
+        // Chi aggiorna da una versione che non registrava la build le vede comunque.
+        XCTAssertTrue(AppInfo.shouldShowWhatsNew(hasCompletedOnboarding: true, lastSeenBuild: nil, currentBuild: "8", isBusy: false))
+        XCTAssertFalse(AppInfo.shouldShowWhatsNew(hasCompletedOnboarding: true, lastSeenBuild: "8", currentBuild: "8", isBusy: false))
+    }
+
+    func testNewsNeverCoverTheIntroductionOrASession() {
+        XCTAssertFalse(AppInfo.shouldShowWhatsNew(hasCompletedOnboarding: false, lastSeenBuild: nil, currentBuild: "8", isBusy: false))
+        XCTAssertFalse(AppInfo.shouldShowWhatsNew(hasCompletedOnboarding: true, lastSeenBuild: "7", currentBuild: "8", isBusy: true))
+    }
+
+    func testCreditsNameTheAuthor() {
+        XCTAssertEqual(AppInfo.author, "Lorenzo Minichilli")
+        XCTAssertTrue(AppInfo.copyright.contains("Lorenzo Minichilli"))
+        XCTAssertFalse(ReleaseNote.current.isEmpty)
+    }
+}

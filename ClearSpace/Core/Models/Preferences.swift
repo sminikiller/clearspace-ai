@@ -100,6 +100,8 @@ enum Feature: String, CaseIterable, Sendable {
 /// dell'app possono aggiungere impostazioni senza perdere quelle esistenti.
 struct UserPreferences: Codable, Equatable, Sendable {
     var hasCompletedOnboarding = false
+    /// Ultima build di cui l'utente ha visto le novità. Serve a mostrarle una volta dopo ogni aggiornamento.
+    var lastSeenBuild: String?
     var iCloudPhotosState: ICloudPhotosState = .unknown
     var manualICloudQuota: ManualICloudQuota?
     /// Scarica contenuti da iCloud solo con Wi‑Fi.
@@ -130,6 +132,7 @@ struct UserPreferences: Codable, Equatable, Sendable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         hasCompletedOnboarding = try container.decodeIfPresent(Bool.self, forKey: .hasCompletedOnboarding) ?? false
+        lastSeenBuild = try container.decodeIfPresent(String.self, forKey: .lastSeenBuild)
         iCloudPhotosState = try container.decodeIfPresent(ICloudPhotosState.self, forKey: .iCloudPhotosState) ?? .unknown
         manualICloudQuota = try container.decodeIfPresent(ManualICloudQuota.self, forKey: .manualICloudQuota)
         wifiOnlyDownloads = try container.decodeIfPresent(Bool.self, forKey: .wifiOnlyDownloads) ?? true

@@ -22,6 +22,7 @@ struct HomeView: View {
                     storageCards
                     potentialCard
                     quickCleanupCard
+                    similarShortcutCard
                     resumeCard
                     modesSection
                     categoriesSection
@@ -242,6 +243,41 @@ struct HomeView: View {
             .font(.footnote)
         }
         .card()
+    }
+
+    /// Scorciatoia verso i gruppi di foto simili ancora da decidere: è lì che si recupera spazio
+    /// tenendo solo lo scatto migliore.
+    @ViewBuilder
+    private var similarShortcutCard: some View {
+        let stat = summary.stat(.similarPhotos)
+        if stat.reviewableCount > 0 {
+            NavigationLink {
+                GroupListView(collection: .similarPhotos)
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "square.stack.3d.down.right.fill")
+                        .font(.title2)
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 34)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Scegli le foto migliori")
+                            .font(.headline)
+                        Text("\(Format.plural(stat.reviewableCount, "scatto simile", "scatti simili")) da decidere: tieni il migliore di ogni gruppo.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
+                }
+                .card(padding: 14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     @ViewBuilder

@@ -53,11 +53,37 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("Informazioni") {
-                    NavigationLink("Cosa può fare ClearSpace su iPhone") {
-                        CapabilitiesInfoView()
+                Section {
+                    NavigationLink {
+                        AboutView()
+                    } label: {
+                        Label("Informazioni su ClearSpace", systemImage: "info.circle")
                     }
-                    DetailRow(label: "Versione", value: versionDescription)
+                    NavigationLink {
+                        WhatsNewView()
+                    } label: {
+                        Label("Novità di questa versione", systemImage: "sparkles")
+                    }
+                    NavigationLink {
+                        QuickGuideView()
+                    } label: {
+                        Label("Guida rapida", systemImage: "questionmark.circle")
+                    }
+                    NavigationLink {
+                        CapabilitiesInfoView()
+                    } label: {
+                        Label("Cosa può fare ClearSpace su iPhone", systemImage: "iphone")
+                    }
+                    Button {
+                        replayIntroduction()
+                    } label: {
+                        Label("Rivedi l'introduzione", systemImage: "play.rectangle")
+                    }
+                    FeedbackLink()
+                } header: {
+                    Text("Informazioni")
+                } footer: {
+                    Text("\(AppInfo.name) \(AppInfo.versionDescription) · Creata da \(AppInfo.author)")
                 }
             }
             .navigationTitle("Impostazioni")
@@ -128,10 +154,16 @@ struct SettingsView: View {
         }
     }
 
-    private var versionDescription: String {
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
-        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
-        return "\(version) (\(build))"
+    /// Chiude le Impostazioni e mostra di nuovo l'introduzione. L'analisi non riparte.
+    private func replayIntroduction() {
+        let preferences = env.preferences
+        dismiss()
+        Task {
+            // Prima si chiude questo pannello, poi compare l'introduzione: due presentazioni
+            // contemporanee si annullerebbero a vicenda.
+            try? await Task.sleep(for: .milliseconds(500))
+            preferences.update { $0.hasCompletedOnboarding = false }
+        }
     }
 }
 

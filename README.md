@@ -2,6 +2,8 @@
 
 **Meno spazio occupato. Più controllo sui tuoi ricordi.**
 
+Ideata e sviluppata da **Lorenzo Minichilli**.
+
 App iOS nativa (Swift, SwiftUI) per la pulizia e l'organizzazione di iPhone e iCloud: foto, video, documenti, download, registrazioni audio, iCloud Drive e assistenza guidata per le altre app. Tutte le analisi avvengono sul dispositivo e nulla viene eliminato senza revisione e conferma.
 
 ---
@@ -19,7 +21,8 @@ Verificato a ogni modifica del codice (ultimo esito: tutto superato):
   - foto simili: il workflow aggiunge al simulatore tre scatti della stessa scena (nitido, sfocato, scuro) e l'app deve riconoscerli come gruppo e consigliare quello nitido; nello swipe deve comparire la striscia con tutti gli scatti, «Tieni la migliore» deve chiudere il gruppo e un solo annullamento deve ripristinarlo;
   - griglia del gruppo: trascinando il dito sulla prima riga si selezionano le tre foto, i tocchi deselezionano, la stella resta sulla foto scelta e si ritrova in Esplora, «Tieni solo la tua migliore» chiude il gruppo; nel confronto i pulsanti stanno sopra il bordo inferiore e il contatore sotto la barra del titolo; nella griglia di una categoria «Seleziona» e un trascinamento selezionano tre elementi;
   - video: un video di prova deve riprodursi dentro la carta e mettersi in pausa con un tocco; con due riprese quasi uguali, toccando l'altra nella striscia deve passare sulla carta e partire, e «Tieni solo questo» deve chiudere il gruppo;
-  - un giro di tutte le altre schermate.
+  - un giro di tutte le altre schermate;
+  - un secondo giro di tutte le schermate con il testo ingrandito (Accessibilità, dimensione AX1) e il tema scuro: per ogni schermata si controlla in automatico che nessun testo o pulsante esca dallo schermo e che i pulsanti principali si possano raggiungere, e si salva un'immagine.
 
 Cosa **non** è stato verificato:
 
@@ -167,6 +170,18 @@ Quando una foto ha degli scatti simili, l'app li mostra tutti: nella modalità s
 - I video si riproducono dentro la carta, senza audio finché non lo si attiva: un tocco mette in pausa, la barra permette di spostarsi, i fotogrammi in basso mostrano i momenti principali, c'è la velocità doppia.
 - Le immagini delle carte successive vengono preparate in anticipo.
 
+### Informazioni, novità e guida
+
+- **Informazioni** (Impostazioni → Informazioni su ClearSpace): autore e crediti, tecnologie usate, impegni sulla privacy, versione.
+- **Novità**: l'elenco dei cambiamenti della versione compare da solo una volta dopo ogni aggiornamento (mai al primo avvio, che ha già l'introduzione) e resta consultabile dalle Impostazioni.
+- **Guida rapida**: gesti dello swipe, foto simili, griglia con selezione rapida, stelle, revisione, foto sfocate.
+- **Commenti**: un pulsante apre TestFlight, da cui i tester inviano note e schermate.
+- **Rivedi l'introduzione**: la ripropone senza far ripartire l'analisi.
+
+### Testo grande e tema scuro
+
+Le schermate che scorrono seguono la dimensione del testo scelta in iOS. Quelle che non possono scorrere (swipe, confronto, barre di comandi) limitano il testo dei controlli a una dimensione che entra sempre; le file di pulsanti e le schede si mettono una sotto l'altra quando non stanno affiancate, le etichette vanno a capo invece di essere tagliate, i selettori a segmenti diventano menu.
+
 ### La scansione progressiva
 
 | Fase | Cosa fa |
@@ -227,7 +242,7 @@ La scansione si può mettere in pausa, si sospende da sola con batteria scarica 
 
 ## Test
 
-`ClearSpaceTests` contiene 79 test sulla logica pura: regole di sicurezza e conferma, piano di eliminazione, sessioni e annullamento, ricerca in linguaggio naturale, confronto dei testi, misure sulle immagini, punteggio di recuperabilità, pianificazione delle code, riepilogo e rilevamento dei viaggi.
+`ClearSpaceTests` contiene oltre 110 test sulla logica pura: regole di sicurezza e conferma, piano di eliminazione, sessioni e annullamento, ricerca in linguaggio naturale, confronto dei testi, misure sulle immagini, punteggio di recuperabilità, pianificazione delle code, riepilogo e rilevamento dei viaggi.
 
 Si eseguono da Xcode con Prodotto → Test, oppure con il workflow di GitHub.
 

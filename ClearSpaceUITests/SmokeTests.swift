@@ -600,6 +600,7 @@ final class SmokeTests: UITestCase {
             XCTAssertTrue(app.navigationBars["Impostazioni"].waitForExistence(timeout: 10))
             pause(1)
             capture("20-impostazioni")
+            checkAboutScreens()
             app.navigationBars["Impostazioni"].buttons["Fine"].tap()
             pause(1)
         }
@@ -647,6 +648,41 @@ final class SmokeTests: UITestCase {
         pause(1)
         capture("33-analizza")
         visitFromList("Cosa può fare ClearSpace", name: "34-cosa-permette-ios")
+    }
+
+    /// Informazioni con autore e crediti, novità della versione e guida rapida, dalle Impostazioni.
+    private func checkAboutScreens() {
+        let about = element(startingWith: "Informazioni su ClearSpace")
+        bringIntoView(about)
+        guard about.exists else {
+            XCTFail("Nelle Impostazioni manca «Informazioni su ClearSpace»")
+            return
+        }
+        about.tap()
+        XCTAssertTrue(app.navigationBars["Informazioni"].waitForExistence(timeout: 5), "Le informazioni non si sono aperte")
+        XCTAssertTrue(element(containing: "Lorenzo Minichilli").waitForExistence(timeout: 5), "Nelle informazioni manca l'autore")
+        pause(1)
+        capture("20b-informazioni")
+        scroll(by: 0.45)
+        capture("20c-informazioni-crediti")
+        goBack()
+
+        for (prefix, title, name) in [
+            ("Novità di questa versione", "Novità", "20d-novita"),
+            ("Guida rapida", "Guida rapida", "20e-guida-rapida")
+        ] {
+            let link = element(startingWith: prefix)
+            bringIntoView(link)
+            guard link.exists else {
+                XCTFail("Nelle Impostazioni manca «\(prefix)»")
+                continue
+            }
+            link.tap()
+            XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 5), "Non si è aperta: \(title)")
+            pause(1)
+            capture(name)
+            goBack()
+        }
     }
 
     private func visitFromHome(_ prefix: String, title: String, name: String) {
