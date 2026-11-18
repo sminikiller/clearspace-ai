@@ -41,6 +41,7 @@ struct AudioHubView: View {
                 if !searchTokens.isEmpty {
                     NavigationLink {
                         ItemGridScreen(query: .filter(searchFilter, title: "Risultati", mode: .search(query: searchText)))
+                            .onAppear { env.recordTutorial(.audioSearch) }
                     } label: {
                         Label("Cerca «\(searchText)»", systemImage: "magnifyingglass")
                     }
@@ -122,6 +123,7 @@ struct AudioHubView: View {
     }
 
     private func importFiles(_ result: Result<[URL], Error>) {
+        env.recordTutorial(.importAudio)
         guard case .success(let urls) = result, !urls.isEmpty else { return }
         var imported = 0
         for url in urls {
@@ -257,6 +259,7 @@ struct AudioDetailView: View {
     }
 
     private func transcribe(_ item: IndexedItem) {
+        env.recordTutorial(.transcribe)
         guard let url = env.folders.url(for: item) else { return }
         isTranscribing = true
         let locale = env.preferences.values.transcriptionLocaleIdentifier

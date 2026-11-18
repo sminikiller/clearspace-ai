@@ -52,6 +52,7 @@ struct SelectableGrid<Header: View, Footer: View, Cell: View>: View {
     let footer: () -> Footer
     let cell: (IndexedItem, Bool) -> Cell
 
+    @Environment(AppEnvironment.self) private var env
     @State private var gridWidth: CGFloat = 0
     @State private var painter: DragSelection?
     @State private var intent: DragIntent = .idle
@@ -211,6 +212,7 @@ struct SelectableGrid<Header: View, Footer: View, Cell: View>: View {
             intent = .painting
             painter = next
             active = next
+            env.recordTutorial(.dragSelect)
         case .painting:
             break
         }

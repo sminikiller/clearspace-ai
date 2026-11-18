@@ -26,6 +26,7 @@ struct DeletionConfirmationView: View {
                 }
             }
             .navigationTitle(report == nil ? "Conferma eliminazione" : "Esito")
+            .onAppear { env.recordTutorial(.openConfirmation) }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if report == nil && !isExecuting {

@@ -158,11 +158,11 @@ struct SwipeSessionView: View {
                     }
                     SwipeActionBar(
                         canUndo: sessions.canUndo,
-                        onDelete: { commit(.delete) },
-                        onPostpone: { commit(.postpone) },
+                        onDelete: { env.recordTutorial(.actionButton); commit(.delete) },
+                        onPostpone: { env.recordTutorial(.actionButton); commit(.postpone) },
                         onUndo: { undo() },
-                        onDetails: { detailItem = item },
-                        onKeep: { commit(.keep) }
+                        onDetails: { env.recordTutorial(.actionButton); detailItem = item },
+                        onKeep: { env.recordTutorial(.actionButton); commit(.keep) }
                     )
                 }
                 // La schermata dello swipe non scorre: carta, striscia e pulsanti devono starci sempre.
@@ -206,7 +206,7 @@ struct SwipeSessionView: View {
                 // Un video scelto dalla striscia parte subito: è stato toccato proprio per guardarlo.
                 autoplaysVideo: sessions.active?.focusedItemID == item.id,
                 isSuspended: comparison != nil || gallery != nil || previewItem != nil || detailItem != nil,
-                onExpand: { previewItem = item }
+                onExpand: { env.recordTutorial(.fullScreen); previewItem = item }
             )
                 .overlay {
                     SwipeStampOverlay(offset: offset)
@@ -240,12 +240,16 @@ struct SwipeSessionView: View {
     private func resolveDrag(_ translation: CGSize) {
         let isHorizontal = abs(translation.width) > abs(translation.height)
         if isHorizontal && translation.width > 100 {
+            env.recordTutorial(.swipeRight)
             commit(.keep)
         } else if isHorizontal && translation.width < -100 {
+            env.recordTutorial(.swipeLeft)
             commit(.delete)
         } else if !isHorizontal && translation.height > 110 {
+            env.recordTutorial(.swipeDown)
             commit(.postpone)
         } else if !isHorizontal && translation.height < -90 {
+            env.recordTutorial(.swipeUp)
             resetCard()
             detailItem = sessions.currentItem
         } else {
@@ -306,6 +310,7 @@ struct SwipeSessionView: View {
     private func undo() {
         let undone = sessions.undo()
         guard undone > 0 else { return }
+        env.recordTutorial(undone > 1 ? .undoGroup : .undo)
         feedbackTrigger += 1
         toast = undone == 1
             ? "Ultima scelta annullata."
@@ -318,6 +323,7 @@ struct SwipeSessionView: View {
         guard !isCommitting else { return }
         offset = .zero
         sessions.focus(on: memberID)
+        env.recordTutorial(.stripSelect)
         feedbackTrigger += 1
     }
 
@@ -325,6 +331,7 @@ struct SwipeSessionView: View {
     /// e propone le altre per l'eliminazione, in un solo gesto.
     /// Come ogni scelta, passa dalla revisione: nulla viene eliminato qui.
     private func keepBest(of group: ItemGroup) {
+        env.recordTutorial(.keepBest)
         let members = env.store.members(of: group)
         let keepers = GroupChoice.preferredKeepers(members: members, suggestedID: group.suggestedKeepID)
         guard !keepers.isEmpty else { return }
@@ -338,6 +345,7 @@ struct SwipeSessionView: View {
 
     /// Conserva l'elemento sulla carta e propone tutti gli altri del gruppo per l'eliminazione.
     private func keepOnly(_ item: IndexedItem, in group: ItemGroup) {
+        env.recordTutorial(.keepOnlyCurrent)
         keepOnly([item.id], in: group, summary: "Tenuto quello sulla carta")
     }
 
@@ -354,6 +362,7 @@ struct SwipeSessionView: View {
 
     /// Decide un singolo elemento del gruppo dal menu della striscia, senza portarlo sulla carta.
     private func decideMember(_ memberID: UUID, _ choice: SwipeChoice) {
+        env.recordTutorial(.stripMenu)
         if choice == .delete {
             let result = sessions.decideGroup(keep: [], delete: [memberID])
             if result.blocked > 0 {
@@ -369,12 +378,15 @@ struct SwipeSessionView: View {
 
     /// Mette o toglie la stella dei migliori dal menu della striscia. Con la stella l'elemento è conservato.
     private func toggleBest(_ memberID: UUID) {
+        env.recordTutorial(.stripMenu)
         guard let member = env.store.item(memberID) else { return }
         if member.isStarred {
             sessions.removeBest([memberID])
+            env.recordTutorial(.removeStar)
             toast = "Stella tolta."
         } else {
             sessions.markBest([memberID])
+            env.recordTutorial(.starBest)
             toast = member.usesMasculineWording
                 ? "Segnato come migliore: resta conservato."
                 : "Segnata come migliore: resta conservata."

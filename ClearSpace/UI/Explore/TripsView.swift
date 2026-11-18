@@ -51,6 +51,7 @@ struct TripsView: View {
             }
         }
         .navigationTitle("Modalità viaggio")
+        .onAppear { env.recordTutorial(.openTrips) }
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await reload()
@@ -77,6 +78,7 @@ struct TripsView: View {
     /// Chiede al servizio di geocodifica di Apple il nome del luogo: è l'unico dato che esce dal dispositivo,
     /// e solo quando l'utente tocca il pulsante.
     private func lookUpPlace(for trip: Trip) {
+        env.recordTutorial(.tripPlace)
         let location = CLLocation(latitude: trip.latitude, longitude: trip.longitude)
         Task {
             let placemarks = try? await CLGeocoder().reverseGeocodeLocation(location)

@@ -151,6 +151,7 @@ struct ReviewView: View {
                 }
                 Spacer(minLength: 8)
                 Button("Ripristina gruppo") {
+                    env.recordTutorial(.restoreGroup)
                     env.safety.restore(section.items.map { $0.id })
                 }
                 .font(.subheadline)
@@ -161,6 +162,7 @@ struct ReviewView: View {
                     ItemTile(item: item)
                         .overlay(alignment: .topTrailing) {
                             Button {
+                                env.recordTutorial(.restoreItem)
                                 env.safety.restore([item.id])
                             } label: {
                                 Image(systemName: "arrow.uturn.backward.circle.fill")
@@ -238,6 +240,7 @@ struct ReviewView: View {
             // Affiancati se ci stanno, uno sopra l'altro con il testo grande.
             AdaptiveStack(spacing: 8) {
                 Button {
+                    env.recordTutorial(.archiveWizard)
                     showsArchiveWizard = true
                 } label: {
                     Label("Archivia prima", systemImage: "archivebox")

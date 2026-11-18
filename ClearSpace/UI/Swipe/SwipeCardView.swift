@@ -17,6 +17,7 @@ struct SwipeCardView: View {
     var isSuspended = false
     var onExpand: () -> Void = {}
 
+    @Environment(AppEnvironment.self) private var env
     @State private var zoom: CGFloat = 1
     @State private var zoomAnchor: UnitPoint = .center
 
@@ -82,6 +83,7 @@ struct SwipeCardView: View {
                 zoomAnchor = value.startAnchor
             }
             .onEnded { _ in
+                env.recordTutorial(.cardZoom)
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     zoom = 1
                 }

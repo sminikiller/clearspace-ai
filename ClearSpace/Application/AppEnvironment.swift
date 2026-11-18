@@ -239,6 +239,38 @@ final class AppEnvironment {
         }
     }
 
+    // MARK: - Tutorial
+
+    /// Registra un'azione compiuta dall'utente: l'esercizio dei tutorial che la chiede si spunta da solo.
+    func recordTutorial(_ event: TutorialEvent) {
+        guard !history.isChecked(event.storageID) else { return }
+        history.setChecked(true, id: event.storageID)
+    }
+
+    /// Un esercizio è fatto se la sua azione è stata registrata o se l'utente l'ha segnato a mano.
+    func isTutorialTaskDone(_ task: TutorialTask) -> Bool {
+        if let event = task.event, history.isChecked(event.storageID) {
+            return true
+        }
+        return history.isChecked(task.manualStorageID)
+    }
+
+    func tutorialProgress(_ tutorial: Tutorial) -> (done: Int, total: Int) {
+        (tutorial.tasks.filter { isTutorialTaskDone($0) }.count, tutorial.tasks.count)
+    }
+
+    /// Azzera tutti i progressi dei tutorial, per rifarli da capo.
+    func resetTutorials() {
+        for event in TutorialEvent.allCases where history.isChecked(event.storageID) {
+            history.setChecked(false, id: event.storageID)
+        }
+        for tutorial in TutorialCatalog.all {
+            for task in tutorial.tasks where history.isChecked(task.manualStorageID) {
+                history.setChecked(false, id: task.manualStorageID)
+            }
+        }
+    }
+
     /// Gruppo di simili o duplicati da mostrare per un elemento. Se appartiene a entrambi viene scelto
     /// quello che li comprende tutti, così non si decide due volte sulle stesse foto.
     func group(containing item: IndexedItem) -> ItemGroup? {

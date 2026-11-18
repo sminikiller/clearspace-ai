@@ -121,7 +121,10 @@ struct GuideDetailView: View {
             Section {
                 Toggle("Procedura completata", isOn: Binding(
                     get: { env.history.isChecked(guide.id) },
-                    set: { env.history.setChecked($0, id: guide.id) }
+                    set: { isOn in
+                        env.history.setChecked(isOn, id: guide.id)
+                        if isOn { env.recordTutorial(.appChecklist) }
+                    }
                 ))
                 Button("Apri l'app Impostazioni") {
                     if let url = URL(string: UIApplication.openSettingsURLString) {
@@ -133,6 +136,7 @@ struct GuideDetailView: View {
             }
         }
         .navigationTitle(guide.title)
+        .onAppear { env.recordTutorial(.appGuide) }
         .navigationBarTitleDisplayMode(.inline)
     }
 }

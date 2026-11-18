@@ -76,6 +76,7 @@ struct AnalyzeView: View {
                     .buttonStyle(.borderedProminent)
                 } else {
                     Button {
+                        env.recordTutorial(.pauseScan)
                         scan.pause()
                     } label: {
                         ButtonTitle("Pausa", systemImage: "pause.fill")
@@ -92,12 +93,14 @@ struct AnalyzeView: View {
         } else {
             AdaptiveStack {
                 Button {
+                    env.recordTutorial(.startScan)
                     scan.start(deep: true)
                 } label: {
                     ButtonTitle("Analisi completa", systemImage: "sparkle.magnifyingglass")
                 }
                 .buttonStyle(.borderedProminent)
                 Button {
+                    env.recordTutorial(.startScan)
                     scan.start(deep: false)
                 } label: {
                     ButtonTitle("Rapida", systemImage: "hare")

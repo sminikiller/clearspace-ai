@@ -186,6 +186,7 @@ struct VideoCompressionView: View {
     // MARK: - Azioni
 
     private func compress(_ item: IndexedItem) {
+        env.recordTutorial(.compressVideo)
         isCompressing = true
         progress = 0
         errorMessage = nil

@@ -19,6 +19,7 @@ struct ICloudCenterView: View {
             quotaSection
         }
         .navigationTitle("Centro iCloud")
+        .onChange(of: env.preferences.values.iCloudPhotosState) { _, _ in env.recordTutorial(.iCloudState) }
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             if let quota = env.preferences.values.manualICloudQuota {
@@ -158,6 +159,7 @@ struct ICloudCenterView: View {
     }
 
     private func saveQuota() {
+        env.recordTutorial(.iCloudQuota)
         let total = Double(totalText.replacingOccurrences(of: ",", with: ".")) ?? 0
         let used = Double(usedText.replacingOccurrences(of: ",", with: ".")) ?? 0
         guard total > 0, used >= 0, used <= total else {

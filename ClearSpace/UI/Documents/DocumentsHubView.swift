@@ -143,6 +143,7 @@ struct DocumentsHubView: View {
         guard case .success(let url) = result else { return }
         do {
             try env.folders.addFolder(at: url)
+            env.recordTutorial(.addFolder)
             toast = "Cartella aggiunta: l'analisi è stata avviata."
             if !env.scan.isRunning {
                 env.scan.start(deep: true)
@@ -268,6 +269,7 @@ struct EvictLocalCopiesView: View {
                 do {
                     try await env.fileOperations.evictLocalCopy(at: url)
                     freed.append(item.id)
+                    env.recordTutorial(.freeLocalCopy)
                 } catch let error as FileOperationError {
                     firstError = firstError ?? error.message
                 } catch {

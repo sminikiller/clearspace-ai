@@ -75,6 +75,11 @@ struct ReleaseNote: Identifiable {
             text: "Nel confronto e a tutto schermo la foto che guardi viene scaricata nitida da iCloud anche con la rete cellulare. Si può spegnere nelle Impostazioni."
         ),
         ReleaseNote(
+            systemImage: "graduationcap",
+            title: "Guida completa e tutorial",
+            text: "Ogni strumento spiegato nei dettagli, con la ricerca nel testo, e un tutorial per strumento con esercizi veri che si spuntano da soli quando li fai. Dalla Home: «Guida e tutorial»."
+        ),
+        ReleaseNote(
             systemImage: "info.circle",
             title: "Informazioni e guida",
             text: "Nelle Impostazioni trovi chi ha creato l'app, i crediti, una guida rapida e il modo per inviare un commento."
@@ -166,6 +171,11 @@ struct AboutView: View {
                     WhatsNewView()
                 } label: {
                     Label("Novità di questa versione", systemImage: "sparkles")
+                }
+                NavigationLink {
+                    GuideHubView()
+                } label: {
+                    Label("Guida completa e tutorial", systemImage: "graduationcap")
                 }
                 NavigationLink {
                     QuickGuideView()
@@ -333,6 +343,14 @@ struct QuickGuideView: View {
 
             Section("Foto sfocate") {
                 guideRow("icloud.and.arrow.down", "Versione nitida", "Con «Ottimizza spazio iPhone» sul telefono c'è spesso solo un'anteprima: tocca «Scarica quella nitida» oppure apri il confronto o la foto a tutto schermo.")
+            }
+
+            Section("Vuoi saperne di più?") {
+                NavigationLink {
+                    GuideHubView()
+                } label: {
+                    Label("Guida completa e tutorial", systemImage: "graduationcap")
+                }
             }
 
             Section("Un problema o un'idea?") {

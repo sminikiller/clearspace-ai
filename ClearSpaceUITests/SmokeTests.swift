@@ -648,6 +648,67 @@ final class SmokeTests: UITestCase {
         pause(1)
         capture("33-analizza")
         visitFromList("Cosa può fare ClearSpace", name: "34-cosa-permette-ios")
+
+        checkGuideAndTutorials()
+    }
+
+    /// Guida completa e tutorial dalla Home. La prova precedente ha fatto uno swipe a sinistra, ha usato
+    /// i pulsanti e l'annullamento: i relativi esercizi del tutorial sullo swipe devono essere spuntati.
+    private func checkGuideAndTutorials() {
+        app.tabBars.buttons["Home"].tap()
+        pause(1)
+        let card = app.descendants(matching: .any)["home.guide"]
+        bringIntoView(card)
+        guard card.exists else {
+            XCTFail("Nella Home manca la scheda Guida e tutorial")
+            return
+        }
+        card.tap()
+        XCTAssertTrue(app.navigationBars["Guida e tutorial"].waitForExistence(timeout: 5), "La guida non si è aperta")
+        pause(1)
+        capture("35a-guida-e-tutorial")
+
+        let chapter = element(startingWith: "Lo swipe")
+        bringIntoView(chapter)
+        if chapter.exists {
+            chapter.tap()
+            XCTAssertTrue(app.navigationBars["Lo swipe"].waitForExistence(timeout: 5), "Il capitolo non si è aperto")
+            XCTAssertTrue(element(containing: "Verso sinistra").waitForExistence(timeout: 5), "Nel capitolo mancano i gesti")
+            pause(1)
+            capture("35b-capitolo-swipe")
+            goBack()
+        } else {
+            XCTFail("Nella guida manca il capitolo sullo swipe")
+        }
+
+        let tutorials = element(startingWith: "Tutti i tutorial")
+        bringIntoView(tutorials)
+        guard tutorials.exists else {
+            XCTFail("Nella guida mancano i tutorial")
+            goBack()
+            return
+        }
+        tutorials.tap()
+        XCTAssertTrue(app.navigationBars["Tutorial"].waitForExistence(timeout: 5), "L'elenco dei tutorial non si è aperto")
+        pause(1)
+        capture("35c-elenco-tutorial")
+        let swipeTutorial = element(startingWith: "Lo swipe")
+        if swipeTutorial.waitForExistence(timeout: 5) {
+            swipeTutorial.tap()
+            XCTAssertTrue(app.navigationBars["Lo swipe"].waitForExistence(timeout: 5), "Il tutorial non si è aperto")
+            pause(1)
+            capture("35d-tutorial-swipe")
+            for taskID in ["swipe.left", "swipe.undo", "swipe.buttons"] {
+                let row = app.descendants(matching: .any)["tutorial.task.\(taskID)"]
+                bringIntoView(row)
+                let isDone = row.exists && (row.label.contains("completato") || row.staticTexts["Completato"].exists)
+                XCTAssertTrue(isDone, "L'esercizio \(taskID) non si è spuntato da solo dopo l'azione")
+            }
+            capture("35e-tutorial-swipe-spuntato")
+            goBack()
+        }
+        goBack()
+        goBack()
     }
 
     /// Informazioni con autore e crediti, novità della versione e guida rapida, dalle Impostazioni.

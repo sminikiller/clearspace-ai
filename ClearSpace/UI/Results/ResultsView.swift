@@ -91,6 +91,7 @@ struct ResultsView: View {
     }
 
     private func measureAgain(reportID: UUID) {
+        env.recordTutorial(.remeasure)
         guard let snapshot = DeviceStorage.snapshot() else { return }
         env.history.updateSnapshotAfter(reportID: reportID, snapshot: snapshot)
         currentSnapshot = snapshot
@@ -186,6 +187,7 @@ struct ResultsView: View {
         Binding(
             get: { env.preferences.values.reminderFrequency },
             set: { frequency in
+                env.recordTutorial(.reminder)
                 env.preferences.update { $0.reminderFrequency = frequency }
                 Task {
                     let granted = await env.reminders.apply(frequency)
@@ -202,6 +204,8 @@ struct ResultsView: View {
 /// Dettaglio di una singola operazione.
 struct ReportDetailView: View {
     let report: CleanupReport
+
+    @Environment(AppEnvironment.self) private var env
 
     var body: some View {
         List {
@@ -227,6 +231,7 @@ struct ReportDetailView: View {
             }
         }
         .navigationTitle(Format.date(report.date))
+        .onAppear { env.recordTutorial(.reportDetail) }
         .navigationBarTitleDisplayMode(.inline)
     }
 }

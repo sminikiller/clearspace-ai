@@ -244,6 +244,7 @@ struct InlineVideoView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
         .onTapGesture {
+            env.recordTutorial(.videoPause)
             controller.togglePlayback()
         }
         .overlay(alignment: .topTrailing) {
@@ -325,9 +326,11 @@ struct InlineVideoView: View {
                 systemImage: controller.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
                 label: controller.isMuted ? "Attiva l'audio" : "Disattiva l'audio"
             ) {
+                env.recordTutorial(.videoAudio)
                 controller.toggleMute()
             }
             Button {
+                env.recordTutorial(.videoSpeed)
                 controller.toggleSpeed()
             } label: {
                 Text(controller.isFast ? "2×" : "1×")
@@ -395,6 +398,7 @@ struct InlineVideoView: View {
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
                         let width = max(1, geometry.size.width)
+                        env.recordTutorial(.videoSeek)
                         controller.seek(toFraction: Double(value.location.x / width))
                     }
             )
@@ -430,6 +434,7 @@ struct InlineVideoView: View {
                     .contentShape(Rectangle())
                     .onTapGesture {
                         let count = Double(max(controller.frames.count, 1))
+                        env.recordTutorial(.videoSeek)
                         controller.seek(toFraction: (Double(index) + 0.5) / count)
                     }
             }

@@ -129,6 +129,7 @@ struct YearDetailView: View {
             }
         }
         .navigationTitle(String(year))
+        .onAppear { env.recordTutorial(.openYear) }
         .task(id: env.listRevision) {
             reload()
         }
@@ -185,6 +186,7 @@ struct YearDetailView: View {
     }
 
     private func startAnnualCleanup() {
+        env.recordTutorial(.annualCleanup)
         isStarting = true
         let targetYear = year
         Task {
@@ -257,6 +259,7 @@ struct NostalgiaView: View {
         }
         .background(Theme.background)
         .navigationTitle("Modalità nostalgia")
+        .onAppear { env.recordTutorial(.openNostalgia) }
         .navigationBarTitleDisplayMode(.inline)
         .task(id: env.listRevision) {
             reload()

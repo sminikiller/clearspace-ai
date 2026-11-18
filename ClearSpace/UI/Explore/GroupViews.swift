@@ -43,6 +43,7 @@ struct GroupListView: View {
             }
         }
         .navigationTitle(collection.title)
+        .onAppear { env.recordTutorial(.openGroups) }
         .toolbar {
             if collection.usesDuplicateGroups && !entries.isEmpty {
                 ToolbarItem(placement: .primaryAction) {

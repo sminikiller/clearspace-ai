@@ -170,6 +170,11 @@ Quando una foto ha degli scatti simili, l'app li mostra tutti: nella modalità s
 - I video si riproducono dentro la carta, senza audio finché non lo si attiva: un tocco mette in pausa, la barra permette di spostarsi, i fotogrammi in basso mostrano i momenti principali, c'è la velocità doppia.
 - Le immagini delle carte successive vengono preparate in anticipo.
 
+### Guida completa e tutorial
+
+- **Guida completa** (Home → Guida e tutorial, oppure Impostazioni): 28 capitoli, uno per strumento o argomento, con la ricerca nel testo: primi passi, Home, analisi e riconoscimento, swipe, video, striscia dei simili, come viene scelta la foto migliore (criteri e pesi), galleria, confronto, stelle e preferiti, tutte le categorie (generate dall'elenco reale delle categorie, con la regola di ciascuna), griglie e ordine «Consigliati», anteprima e dettagli, ricerca intelligente con tutte le parole riconosciute, modalità di pulizia, archivio, viaggi e nostalgia, revisione e conferma, risultati e promemoria, documenti, audio, compressione dei video, iCloud e altre app, protezioni e regole di sicurezza, impostazioni, privacy, domande frequenti e riepilogo dei gesti. Il contenuto è in `Core/Content/GuideContent.swift`.
+- **Tutorial**: uno per strumento (17), con preparazione, pulsante per aprire lo strumento ed esercizi. Gli esercizi legati a un'azione si spuntano da soli quando l'utente la compie davvero (l'app registra l'azione con `AppEnvironment.recordTutorial`); gli altri si segnano a mano. I progressi sono salvati sul dispositivo e si possono azzerare. Il contenuto è in `Core/Content/TutorialContent.swift`; un test controlla che ogni azione registrata appartenga a un esercizio e che ogni categoria sia spiegata nella guida.
+
 ### Informazioni, novità e guida
 
 - **Informazioni** (Impostazioni → Informazioni su ClearSpace): autore e crediti, tecnologie usate, impegni sulla privacy, versione.

@@ -50,6 +50,7 @@ struct OrganizeView: View {
             }
         }
         .navigationTitle("Organizza")
+        .onAppear { env.recordTutorial(.organize) }
         .navigationBarTitleDisplayMode(.inline)
     }
 

@@ -19,6 +19,7 @@ struct ItemDetailView: View {
                 }
             }
             .navigationTitle("Dettagli")
+            .onAppear { env.recordTutorial(.details) }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -158,6 +159,7 @@ struct ItemDetailView: View {
                 }
             } else {
                 Button("Proteggi questo elemento") {
+                    env.recordTutorial(.protectItem)
                     env.safety.protect([item.id])
                 }
             }
@@ -182,6 +184,7 @@ struct ItemDetailView: View {
             titleVisibility: .visible
         ) {
             Button("Sblocca") {
+                env.recordTutorial(.unlockItem)
                 env.safety.unlock(item.id)
             }
             Button("Annulla", role: .cancel) {}

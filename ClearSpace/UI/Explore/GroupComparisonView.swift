@@ -89,10 +89,21 @@ struct GroupComparisonView: View {
             .environment(env)
         }
         .toast($toast)
+        .onChange(of: viewport.isZoomed) { _, isZoomed in
+            if isZoomed {
+                env.recordTutorial(.compareZoom)
+            }
+        }
+        .onChange(of: selectedID) { previous, _ in
+            if previous != nil {
+                env.recordTutorial(.compareStep)
+            }
+        }
         .task(id: groupID) {
             if selectedID == nil {
                 selectedID = initialItemID
             }
+            env.recordTutorial(.openCompare)
             // Se la scansione non ha ancora confrontato questi scatti, lo si fa adesso.
             isRefining = true
             await env.refineSuggestion(forGroup: groupID)
@@ -463,6 +474,7 @@ struct GroupComparisonView: View {
         Binding(
             get: { env.store.item(member.id)?.reviewStatus.isQueuedForDeletion ?? false },
             set: { shouldDelete in
+                env.recordTutorial(.compareDecision)
                 if shouldDelete {
                     env.sessions.decideGroup(keep: [], delete: [member.id])
                 } else {
@@ -473,6 +485,8 @@ struct GroupComparisonView: View {
     }
 
     private func toggleStar(_ member: IndexedItem) {
+        env.recordTutorial(.compareDecision)
+        env.recordTutorial(member.isStarred ? .removeStar : .starBest)
         if member.isStarred {
             env.sessions.removeBest([member.id])
             toast = "Stella tolta."
@@ -487,6 +501,7 @@ struct GroupComparisonView: View {
     private func keepOnly(_ keepers: Set<UUID>, in group: ItemGroup) {
         let choice = GroupChoice.keepOnly(keepers, among: group.memberIDs)
         let result = env.sessions.decideGroup(keep: choice.keep, delete: choice.delete)
+        env.recordTutorial(.keepBest)
         var message = "\(Format.plural(result.applied, "elemento aggiunto", "elementi aggiunti")) alla revisione."
         if result.blocked > 0 {
             message += " \(Format.plural(result.blocked, "protetto saltato", "protetti saltati"))."

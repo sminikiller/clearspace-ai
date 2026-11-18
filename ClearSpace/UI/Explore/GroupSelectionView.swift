@@ -133,6 +133,7 @@ struct GroupSelectionView: View {
         }
         .toast($toast)
         .task(id: groupID) {
+            env.recordTutorial(.openGallery)
             // Se la scansione non ha ancora confrontato questi scatti lo si fa adesso, così voti e
             // consiglio usano già tutti i criteri.
             await env.refineSuggestion(forGroup: groupID)
@@ -208,6 +209,11 @@ struct GroupSelectionView: View {
                 }
             }
             .adaptiveSegmentedStyle()
+            .onChange(of: order) { _, newOrder in
+                if newOrder == .quality {
+                    env.recordTutorial(.galleryOrder)
+                }
+            }
             quickSelection(group: group, members: members)
         }
         .padding(.top, 8)
@@ -275,7 +281,10 @@ struct GroupSelectionView: View {
     }
 
     private func quickButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(title, action: action)
+        Button(title) {
+            env.recordTutorial(.quickSelect)
+            action()
+        }
             .font(.footnote.weight(.semibold))
             .buttonStyle(.bordered)
             .controlSize(.small)
@@ -392,12 +401,14 @@ struct GroupSelectionView: View {
     @ViewBuilder
     private func contextActions(for item: IndexedItem) -> some View {
         Button {
+            env.recordTutorial(.galleryMenu)
             previewItem = item
         } label: {
             Label(item.isVideo ? "Guarda" : "Vedi a tutto schermo", systemImage: item.isVideo ? "play" : "arrow.up.left.and.arrow.down.right")
         }
         if opensComparison {
             Button {
+                env.recordTutorial(.galleryMenu)
                 comparison = ComparisonStart(itemID: item.id)
             } label: {
                 Label("Confronta da qui", systemImage: "rectangle.split.2x1")
@@ -456,6 +467,7 @@ struct GroupSelectionView: View {
     private func markBest(_ items: [IndexedItem]) {
         guard !items.isEmpty else { return }
         let count = env.sessions.markBest(items.map { $0.id })
+        env.recordTutorial(.starBest)
         selection.removeAll()
         if count == 1 {
             toast = isMasculine ? "Segnato come migliore: resta conservato." : "Segnata come migliore: resta conservata."
@@ -469,6 +481,7 @@ struct GroupSelectionView: View {
     private func removeStars(_ items: [IndexedItem]) {
         guard !items.isEmpty else { return }
         env.sessions.removeBest(items.map { $0.id })
+        env.recordTutorial(.removeStar)
         selection.removeAll()
         toast = items.count == 1 ? "Stella tolta." : "Stelle tolte."
     }
@@ -490,6 +503,7 @@ struct GroupSelectionView: View {
     private func keepOnly(_ keepers: Set<UUID>, in group: ItemGroup) {
         let choice = GroupChoice.keepOnly(keepers, among: group.memberIDs)
         let result = env.sessions.decideGroup(keep: choice.keep, delete: choice.delete)
+        env.recordTutorial(.keepBest)
         selection.removeAll()
         finish(proposalMessage(result))
     }

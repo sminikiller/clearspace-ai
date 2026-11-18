@@ -25,6 +25,7 @@ struct HomeView: View {
                     similarShortcutCard
                     resumeCard
                     modesSection
+                    guideCard
                     categoriesSection
                 }
                 .padding(.horizontal, 16)
@@ -292,6 +293,7 @@ struct HomeView: View {
                 ProgressView(value: session.progress)
                 AdaptiveStack {
                     Button("Riprendi") {
+                        env.recordTutorial(.resumeSession)
                         env.sessions.resume(session.id)
                     }
                     .buttonStyle(.borderedProminent)
@@ -332,6 +334,45 @@ struct HomeView: View {
             }
         }
         .buttonStyle(.plain)
+    }
+
+    /// Guida completa e tutorial con esercizi, con l'avanzamento.
+    private var guideCard: some View {
+        var done = 0
+        var total = 0
+        for tutorial in TutorialCatalog.all {
+            let progress = env.tutorialProgress(tutorial)
+            done += progress.done
+            total += progress.total
+        }
+        return NavigationLink {
+            GuideHubView()
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "graduationcap.fill")
+                    .font(.title2)
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 34)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Guida e tutorial")
+                        .font(.headline)
+                    Text("Ogni strumento spiegato, con esercizi da provare: \(done) di \(total) completati.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    ProgressView(value: Double(done), total: Double(max(total, 1)))
+                }
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }
+            .card(padding: 14)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("home.guide")
     }
 
     private func modeRow(_ title: String, _ subtitle: String, _ systemImage: String) -> some View {
@@ -411,6 +452,7 @@ struct HomeView: View {
     // MARK: - Azioni
 
     private func startQuickCleanup() {
+        env.recordTutorial(.quickCleanup)
         isStarting = true
         let limit = env.preferences.values.quickSessionSize
         Task {

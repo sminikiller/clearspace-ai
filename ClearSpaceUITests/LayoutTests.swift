@@ -143,7 +143,42 @@ final class LayoutTests: UITestCase {
         } else {
             XCTFail("Home: manca il pulsante Impostazioni")
         }
+        guideScreens()
     }
+
+    /// Guida completa, un capitolo, l'elenco dei tutorial e un tutorial, con il testo grande.
+    private func guideScreens() {
+        let card = app.descendants(matching: .any)["home.guide"]
+        bringIntoView(card)
+        guard card.exists, card.isHittable else {
+            XCTFail("Home: la scheda Guida e tutorial non si raggiunge")
+            return
+        }
+        card.tap()
+        guard app.navigationBars["Guida e tutorial"].waitForExistence(timeout: 5) else {
+            XCTFail("La guida non si è aperta")
+            return
+        }
+        checkLayout("L17-guida")
+        scroll(by: 0.45)
+        checkLayout("L17b-guida-capitoli")
+        visit(startingWith: "Come l'app sceglie la migliore", name: "L18-capitolo-consiglio", scrolls: 3)
+        let tutorials = element(startingWith: "Tutti i tutorial")
+        bringIntoView(tutorials)
+        if tutorials.exists && tutorials.isHittable {
+            tutorials.tap()
+            pause(1)
+            checkLayout("L19-tutorial")
+            visit(startingWith: "Galleria e stelle", name: "L19b-tutorial-galleria", scrolls: 3)
+            goBack()
+        } else {
+            XCTFail("Guida: «Tutti i tutorial» non si raggiunge")
+        }
+        goBack()
+        scrollToTop()
+    }
+
+
 
     // MARK: - Analizza
 

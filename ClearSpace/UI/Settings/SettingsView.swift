@@ -65,6 +65,11 @@ struct SettingsView: View {
                         Label("Novità di questa versione", systemImage: "sparkles")
                     }
                     NavigationLink {
+                        GuideHubView(openTab: openTab)
+                    } label: {
+                        Label("Guida completa e tutorial", systemImage: "graduationcap")
+                    }
+                    NavigationLink {
                         QuickGuideView()
                     } label: {
                         Label("Guida rapida", systemImage: "questionmark.circle")
@@ -87,6 +92,7 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Impostazioni")
+            .onChange(of: env.preferences.values.iCloudPhotosState) { _, _ in env.recordTutorial(.iCloudState) }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -151,6 +157,16 @@ struct SettingsView: View {
             Text("iCloud")
         } footer: {
             Text("Indica se usi Foto di iCloud: serve a mostrare con precisione gli effetti di un'eliminazione.")
+        }
+    }
+
+    /// Dalla guida si apre una scheda principale: prima si chiudono le Impostazioni.
+    private func openTab(_ tab: AppTab) {
+        let router = env.router
+        dismiss()
+        Task {
+            try? await Task.sleep(for: .milliseconds(350))
+            router.selectedTab = tab
         }
     }
 
@@ -272,6 +288,7 @@ struct ProtectionSettingsView: View {
         Binding(
             get: { rules.protectedAlbumIDs.contains(id) },
             set: { isOn in
+                env.recordTutorial(.protectionRules)
                 env.preferences.update { preferences in
                     if isOn {
                         preferences.protection.protectedAlbumIDs.insert(id)
@@ -299,6 +316,7 @@ struct ProtectionSettingsView: View {
     }
 
     private func addPeriod() {
+        env.recordTutorial(.protectionRules)
         let name = periodName.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return }
         let calendar = Calendar.current

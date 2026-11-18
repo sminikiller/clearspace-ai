@@ -90,6 +90,7 @@ struct SmartSearchView: View {
                     query: .filter(parsed.filter, title: "Risultati", mode: .search(query: query)),
                     limit: parsed.filter.limit
                 )
+                .onAppear { env.recordTutorial(.searchResults) }
             } label: {
                 HStack {
                     Label("Mostra i risultati", systemImage: "square.grid.2x2")
@@ -133,6 +134,7 @@ struct SmartSearchView: View {
     }
 
     private func runSearch() {
+        env.recordTutorial(.search)
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         isFocused = false

@@ -40,6 +40,7 @@ struct QuickCleanupSheet: View {
     }
 
     private func start() {
+        env.recordTutorial(.quickCleanup)
         let limit = env.preferences.values.quickSessionSize
         let environment = env
         dismiss()
@@ -94,6 +95,7 @@ struct GoalCleanupSheet: View {
     }
 
     private func start() {
+        env.recordTutorial(.goalCleanup)
         let target = Int64(targetGB) * AppConfiguration.Thresholds.gigabyte
         let title = "Obiettivo \(targetGB) GB"
         let environment = env
@@ -184,7 +186,10 @@ struct GuidedCleanupView: View {
 
         Toggle("Passo completato", isOn: Binding(
             get: { env.history.isChecked(checklistID(step)) },
-            set: { env.history.setChecked($0, id: checklistID(step)) }
+            set: { isOn in
+                env.history.setChecked(isOn, id: checklistID(step))
+                if isOn { env.recordTutorial(.guidedCheck) }
+            }
         ))
         .font(.subheadline)
     }
@@ -203,6 +208,7 @@ struct GuidedCleanupView: View {
     }
 
     private func start(_ step: GuidedStepKind) {
+        env.recordTutorial(.guidedStep)
         startingStep = step
         Task {
             let started = await env.startSession(title: step.title, mode: .guided(step: step)) { input in
@@ -495,6 +501,7 @@ struct AdvancedCleanupView: View {
     }
 
     private func startSwipe() {
+        env.recordTutorial(.advancedCleanup)
         isStarting = true
         let active = effectiveFilter
         Task {

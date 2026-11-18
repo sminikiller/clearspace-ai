@@ -71,7 +71,7 @@ struct ItemGridScreen: View {
             selection: $selection,
             isSelecting: isSelecting,
             minimumCellSide: 100,
-            onOpen: { item in previewItem = item },
+            onOpen: { item in env.recordTutorial(.preview); previewItem = item },
             header: {
                 header
                 if items.isEmpty && !isLoading {
@@ -103,6 +103,7 @@ struct ItemGridScreen: View {
         )
         .background(Theme.background)
         .navigationTitle(query.title)
+        .onAppear { env.recordTutorial(.openCategory) }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarContent }
         .safeAreaInset(edge: .bottom) {
@@ -154,7 +155,7 @@ struct ItemGridScreen: View {
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
             Menu {
-                Picker("Ordina", selection: Binding(get: { activeSort }, set: { sort = $0 })) {
+                Picker("Ordina", selection: Binding(get: { activeSort }, set: { sort = $0; env.recordTutorial(.sortGrid) })) {
                     ForEach(ItemSort.allCases, id: \.self) { order in
                         Text(order.title).tag(order)
                     }
@@ -166,6 +167,9 @@ struct ItemGridScreen: View {
         ToolbarItem(placement: .primaryAction) {
             Button {
                 isSelecting.toggle()
+                if isSelecting {
+                    env.recordTutorial(.selectMode)
+                }
                 if !isSelecting {
                     selection.removeAll()
                 }
@@ -210,6 +214,7 @@ struct ItemGridScreen: View {
                 }
                 BarActionButton(title: "Proteggi", systemImage: "lock", tint: Theme.info) {
                     env.safety.protect(Array(selection))
+                    env.recordTutorial(.protectItem)
                     finishSelection("Elementi protetti.")
                 }
             }
@@ -233,6 +238,7 @@ struct ItemGridScreen: View {
     }
 
     private func finishSelection(_ message: String) {
+        env.recordTutorial(.gridAction)
         selection.removeAll()
         isSelecting = false
         toast = message
