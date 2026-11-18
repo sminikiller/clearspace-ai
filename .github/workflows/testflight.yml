@@ -73,7 +73,10 @@ jobs:
           tail -n 3 archive.log
           exit $STATUS
 
+      # Di solito ci mette un paio di minuti: se il collegamento con Apple si blocca, meglio
+      # fermarsi presto e riprovare che occupare il runner per un'ora.
       - name: Firma e carica su App Store Connect
+        timeout-minutes: 20
         run: |
           set +e
           sed "s/__TEAM_ID__/$TEAM_ID/" Config/ExportOptions.plist > "$RUNNER_TEMP/ExportOptions.plist"
