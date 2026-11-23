@@ -48,6 +48,7 @@ final class SmokeTests: UITestCase {
         }
         capture("40-foto-simili")
         checkGroupSequence()
+        bringIntoView(groupRow)
         groupRow.tap()
 
         // Galleria del gruppo: tutte le anteprime insieme, con la stella messa durante lo swipe
@@ -180,11 +181,18 @@ final class SmokeTests: UITestCase {
         }
         capture("48-video-simili")
 
-        // Un tocco sull'altro video: passa sulla carta e parte
-        other.tap()
+        // Un tocco sull'altro video: passa sulla carta e parte. Si tocca il centro dell'anteprima, come
+        // farebbe una persona: vale sia per l'anteprima a sinistra di quella sulla carta sia per quella
+        // a destra (quale delle due sia consigliata cambia da un'esecuzione all'altra).
+        other.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let moved = element(startingWith: otherPrefix + ", sulla carta").waitForExistence(timeout: 6)
+        if !moved {
+            capture("48b-dopo-il-tocco-sulla-striscia")
+        }
+        let onCard = element(containing: ", sulla carta")
         XCTAssertTrue(
-            element(startingWith: otherPrefix + ", sulla carta").waitForExistence(timeout: 6),
-            "Il video toccato nella striscia non è passato sulla carta"
+            moved,
+            "Il video toccato nella striscia (\(otherPrefix)) non è passato sulla carta; sulla carta: \(onCard.exists ? onCard.label : "nessuno")"
         )
         pause(3)
         capture("49-altro-video-sulla-carta")

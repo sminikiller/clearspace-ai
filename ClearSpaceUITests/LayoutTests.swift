@@ -303,6 +303,9 @@ final class LayoutTests: UITestCase {
         } else {
             XCTFail("Gruppi: «Decidi un gruppo dopo l'altro» non si raggiunge")
         }
+        // Con il testo grande la voce della sequenza spinge il primo gruppo in basso, sotto la barra
+        // delle schede: un tocco lì finirebbe sulla barra. Lo si porta prima al centro dello schermo.
+        bringIntoView(row)
         row.tap()
         if app.staticTexts["grid.selectionCount"].waitForExistence(timeout: 10) {
             pause(1)
