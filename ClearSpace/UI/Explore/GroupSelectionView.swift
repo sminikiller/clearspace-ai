@@ -57,6 +57,9 @@ struct GroupSelectionView: View {
     var closesAfterDecision = false
     /// Mostra il confronto grande. È spento quando la galleria è aperta dal confronto stesso.
     var opensComparison = true
+    /// La galleria fa parte della revisione gruppo per gruppo: dopo una scelta su tutto il gruppo si
+    /// passa al successivo invece di restare qui.
+    var sequence: GroupSequenceControl?
 
     @Environment(AppEnvironment.self) private var env
     @Environment(\.dismiss) private var dismiss
@@ -99,6 +102,36 @@ struct GroupSelectionView: View {
         members.first?.usesMasculineWording ?? false
     }
 
+    /// "Gruppo 3 di 12" nella revisione gruppo per gruppo, altrimenti "Scegli le migliori".
+    private var title: String {
+        if let sequence {
+            return "Gruppo \(sequence.position) di \(sequence.total)"
+        }
+        return isMasculine ? "Scegli i migliori" : "Scegli le migliori"
+    }
+
+    /// Non resta nulla da decidere nel gruppo: ogni elemento è conservato, proposto o protetto.
+    private var isGroupDecided: Bool {
+        guard let group else { return true }
+        return GroupReview.summary(
+            members: members,
+            suggestedID: group.suggestedKeepID,
+            evaluator: env.safety.evaluator()
+        ).isDecided
+    }
+
+    /// «Salta» lascia il gruppo da decidere; quando è già deciso diventa «Avanti».
+    private func nextButton(_ sequence: GroupSequenceControl) -> some View {
+        let decided = isGroupDecided
+        return Button(decided ? "Avanti" : "Salta") {
+            selection.removeAll()
+            sequence.onNext()
+        }
+        .fontWeight(decided ? .semibold : .regular)
+        .accessibilityLabel(decided ? "Passa al gruppo successivo" : "Salta il gruppo")
+        .accessibilityIdentifier("sequence.next")
+    }
+
     var body: some View {
         let _ = env.store.revision
         Group {
@@ -117,10 +150,15 @@ struct GroupSelectionView: View {
         // Schermata di lavoro fitta: con il testo molto grande intestazione e barra si fermano a una
         // dimensione che lascia vedere la griglia.
         .compactControlText()
-        .navigationTitle(isMasculine ? "Scegli i migliori" : "Scegli le migliori")
+        .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
         .toolbar {
+            if let sequence {
+                ToolbarItem(placement: .primaryAction) {
+                    nextButton(sequence)
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 moreMenu
             }
@@ -196,6 +234,9 @@ struct GroupSelectionView: View {
 
     private func header(group: ItemGroup, members: [IndexedItem]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
+            if let sequence {
+                sequenceProgress(sequence)
+            }
             recommendation(group: group, members: members)
             Text(isMasculine
                  ? "Tocca o trascina il dito sulle anteprime per selezionarne tanti insieme. Tieni premuto per vederne uno in grande."
@@ -217,6 +258,21 @@ struct GroupSelectionView: View {
             quickSelection(group: group, members: members)
         }
         .padding(.top, 8)
+    }
+
+    /// Avanzamento della revisione gruppo per gruppo e cosa succede dopo una scelta.
+    private func sequenceProgress(_ sequence: GroupSequenceControl) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            ProgressView(value: Double(sequence.position - 1), total: Double(max(sequence.total, 1)))
+                .tint(Theme.keep)
+                .accessibilityLabel("Gruppo \(sequence.position) di \(sequence.total)")
+            Text(isMasculine
+                 ? "Dopo «Tieni solo il migliore» o «Tieni tutti» compare da solo il gruppo successivo. «Salta» lo lascia da decidere."
+                 : "Dopo «Tieni solo la migliore» o «Tieni tutte» compare da solo il gruppo successivo. «Salta» lo lascia da decidere.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     private func recommendation(group: ItemGroup, members: [IndexedItem]) -> some View {
@@ -524,7 +580,10 @@ struct GroupSelectionView: View {
     }
 
     private func finish(_ message: String) {
-        if closesAfterDecision {
+        if let sequence {
+            // Revisione gruppo per gruppo: il messaggio lo mostra la sequenza, che passa al successivo.
+            sequence.onDecided(message)
+        } else if closesAfterDecision {
             dismiss()
         } else {
             toast = message

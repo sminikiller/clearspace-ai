@@ -286,6 +286,23 @@ final class LayoutTests: UITestCase {
             return
         }
         checkLayout("L24-gruppi-simili")
+
+        // Un gruppo dopo l'altro: galleria con «Gruppo 1 di N» e «Salta» (o «Avanti») raggiungibile.
+        let sequence = app.descendants(matching: .any)["groups.sequence"]
+        bringIntoView(sequence)
+        if sequence.exists && sequence.isHittable {
+            sequence.tap()
+            if app.staticTexts["grid.selectionCount"].waitForExistence(timeout: 10) {
+                pause(1)
+                checkLayout("L24b-gruppo-dopo-gruppo")
+                checkReachable(sequenceNextButton, "Gruppo dopo gruppo: «Salta» o «Avanti»")
+            } else {
+                XCTFail("La revisione gruppo per gruppo non si è aperta")
+            }
+            goBack()
+        } else {
+            XCTFail("Gruppi: «Decidi un gruppo dopo l'altro» non si raggiunge")
+        }
         row.tap()
         if app.staticTexts["grid.selectionCount"].waitForExistence(timeout: 10) {
             pause(1)
@@ -419,6 +436,18 @@ final class LayoutTests: UITestCase {
     // MARK: - Revisione e conferma
 
     private func reviewScreens() {
+        // La Home ricorda ciò che aspetta la conferma e porta alla Revisione con un tocco.
+        app.tabBars.buttons["Home"].tap()
+        pause(1)
+        let pending = app.descendants(matching: .any)["home.pendingReview"]
+        bringIntoView(pending)
+        if pending.exists && pending.isHittable {
+            checkLayout("L49-home-pronto-da-liberare")
+            pending.tap()
+            pause(1)
+        } else {
+            XCTFail("Home: manca la scheda «Pronto da liberare» con gli elementi proposti")
+        }
         app.tabBars.buttons["Revisione"].tap()
         pause(1.5)
         checkLayout("L50-revisione")

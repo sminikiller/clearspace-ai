@@ -16,6 +16,7 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 analysisSection
+                similaritySection
                 reviewSection
                 thresholdsSection
                 iCloudSection
@@ -113,6 +114,32 @@ struct SettingsView: View {
         } footer: {
             Text("Le analisi avvengono sul dispositivo. Il download degli originali da iCloud serve solo a verificare i duplicati esatti e resta disattivato finché non lo consenti. Le foto nascoste, se incluse, restano protette.")
         }
+    }
+
+    /// Quanto devono somigliarsi due scatti per finire nello stesso gruppo.
+    private var similaritySection: some View {
+        Section {
+            Picker("Raggruppamento", selection: sensitivityBinding) {
+                ForEach(SimilaritySensitivity.allCases, id: \.self) { sensitivity in
+                    Text(sensitivity.title).tag(sensitivity)
+                }
+            }
+        } header: {
+            Text("Foto simili")
+        } footer: {
+            Text("\(env.preferences.values.similaritySensitivity.detail) Cambiandola, i gruppi vengono ricalcolati con un'analisi rapida: le tue scelte e le stelle restano.")
+        }
+    }
+
+    private var sensitivityBinding: Binding<SimilaritySensitivity> {
+        Binding(
+            get: { env.preferences.values.similaritySensitivity },
+            set: { sensitivity in
+                Task {
+                    await env.setSimilaritySensitivity(sensitivity)
+                }
+            }
+        )
     }
 
     private var reviewSection: some View {

@@ -232,6 +232,20 @@ final class IndexStore {
         didChange(index: true, review: false, immediate: false)
     }
 
+    /// Fa ripetere a tutte le foto della libreria il confronto con gli scatti vicini, ad esempio dopo un
+    /// cambio della sensibilità delle foto simili. I gruppi attuali restano finché l'analisi successiva
+    /// non li ricalcola; decisioni e stelle, legate ai singoli elementi, non cambiano.
+    func resetSimilarityChecks() {
+        let ids = itemsByID.values
+            .filter { $0.source == .photoLibrary && $0.category == .photo && $0.traits.contains(.similarityChecked) }
+            .map { $0.id }
+        guard !ids.isEmpty else { return }
+        for id in ids {
+            itemsByID[id]?.traits.remove(.similarityChecked)
+        }
+        didChange(index: true, review: false, immediate: false)
+    }
+
     func addTraits(_ traits: ItemTraits, to ids: Set<UUID>) {
         guard !ids.isEmpty else { return }
         for id in ids {
@@ -467,10 +481,14 @@ final class IndexStore {
     }
 
     private func runSummaryLoop() async {
-        repeat {
+        while true {
             summaryDirty = false
             summary = await computeSummary()
-        } while summaryDirty
+            guard summaryDirty else { break }
+            // Durante un'analisi l'indice cambia di continuo: il riepilogo si ricalcola al massimo
+            // una volta al secondo, invece di occupare un processore senza sosta.
+            try? await Task.sleep(for: .seconds(1))
+        }
         summaryRunning = false
     }
 
@@ -590,12 +608,21 @@ final class IndexStore {
     }
 
     private func runIndexSaveLoop() async {
-        repeat {
+        while true {
             indexDirty = false
             await writeIndex()
-        } while indexDirty
+            guard indexDirty else { break }
+            // Durante un'analisi l'indice cambia ogni momento: riscriverlo per intero senza sosta
+            // consumerebbe batteria e memoria. Le decisioni dell'utente hanno un file a parte, salvato
+            // subito; l'indice si salva al massimo ogni pochi secondi e comunque quando l'app va in
+            // background (`flush`).
+            try? await Task.sleep(for: .seconds(Self.indexSaveInterval))
+        }
         indexSaveRunning = false
     }
+
+    /// Intervallo minimo tra due salvataggi completi dell'indice mentre continua a cambiare.
+    private static let indexSaveInterval: Double = 10
 
     private func writeIndex() async {
         let snapshot = IndexSnapshot(

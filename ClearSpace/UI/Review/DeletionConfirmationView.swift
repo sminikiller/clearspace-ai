@@ -232,12 +232,78 @@ struct DeletionConfirmationView: View {
     private func resultView(_ report: CleanupReport) -> some View {
         List {
             ReportSummarySections(report: report)
+            if report.recentlyDeletedCount > 0 {
+                RecentlyDeletedSection(count: report.recentlyDeletedCount, deviceBytes: report.recentlyDeletedDeviceBytes)
+            }
             Section {
                 Button("Fine") {
                     dismiss()
                 }
                 .frame(maxWidth: .infinity)
             }
+        }
+    }
+}
+
+/// Le foto eliminate restano 30 giorni in Eliminati di recente e lo spazio si libera solo quando
+/// quell'album viene svuotato. iOS non permette alle app di svuotarlo: la sezione spiega come fare e
+/// apre l'app Foto.
+struct RecentlyDeletedSection: View {
+    let count: Int
+    let deviceBytes: Int64
+    /// Se presente compare «L'ho già svuotato», che nasconde l'avviso.
+    var onDismiss: (() -> Void)?
+
+    @Environment(\.openURL) private var openURL
+    @State private var openFailed = false
+
+    /// Apre l'app Foto. Non è un indirizzo documentato da Apple: se non funziona lo si dice.
+    private static let photosURL = URL(string: "photos-redirect://")
+
+    /// "3 elementi sono in Eliminati di recente e occupano ancora 24 MB sull'iPhone…".
+    private var explanation: String {
+        let subject = Format.plural(count, "elemento è", "elementi sono")
+        if deviceBytes > 0 {
+            let verb = count == 1 ? "occupa" : "occupano"
+            return "\(subject) in Eliminati di recente e \(verb) ancora \(Format.bytes(deviceBytes)) sull'iPhone. Per liberare subito lo spazio svuota quell'album; altrimenti iOS lo fa da solo dopo 30 giorni."
+        }
+        let stays = count == 1 ? "resta recuperabile" : "restano recuperabili"
+        return "\(subject) in Eliminati di recente, dove \(stays) per 30 giorni. Svuotando quell'album lo spazio si libera subito."
+    }
+
+    var body: some View {
+        Section {
+            Text(explanation)
+                .font(.subheadline)
+                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Come fare")
+                    .font(.subheadline.weight(.semibold))
+                Text("In Foto apri «Eliminati di recente» (nella sezione Utility, in fondo), tocca Seleziona e poi Elimina tutto. iOS chiede il codice o Face ID: è normale.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Button {
+                guard let url = Self.photosURL else { return }
+                openURL(url) { accepted in
+                    openFailed = !accepted
+                }
+            } label: {
+                Label("Apri l'app Foto", systemImage: "photo.on.rectangle")
+            }
+            .accessibilityIdentifier("recentlyDeleted.openPhotos")
+            if openFailed {
+                Text("Non è stato possibile aprire Foto da qui: aprila dalla schermata Home.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            if let onDismiss {
+                Button("L'ho già svuotato", action: onDismiss)
+                    .font(.subheadline)
+            }
+        } header: {
+            Text("Libera davvero lo spazio")
         }
     }
 }

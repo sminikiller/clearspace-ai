@@ -21,6 +21,7 @@ struct ResultsView: View {
             List {
                 activitySection
                 spaceSection
+                recentlyDeletedSection
                 comparisonSection
                 chartSection
                 historySection
@@ -63,6 +64,30 @@ struct ResultsView: View {
         } footer: {
             Text("Conta soltanto ciò che è stato davvero eliminato. I valori di iPhone e iCloud non vanno sommati: sono gli stessi contenuti visti da due posizioni. Per le foto lo spazio diventa disponibile quando Eliminati di recente viene svuotato.")
         }
+    }
+
+    /// Dopo un'eliminazione recente di foto e video ricorda che lo spazio si libera svuotando
+    /// Eliminati di recente. Dopo 30 giorni iOS lo svuota da solo e l'avviso sparisce.
+    @ViewBuilder
+    private var recentlyDeletedSection: some View {
+        if let report = env.history.lastReport,
+           report.recentlyDeletedCount > 0,
+           Date().timeIntervalSince(report.date) < 30 * 86_400,
+           !env.history.isChecked(Self.emptiedKey(report.id)) {
+            RecentlyDeletedSection(
+                count: report.recentlyDeletedCount,
+                deviceBytes: report.recentlyDeletedDeviceBytes,
+                onDismiss: {
+                    env.history.setChecked(true, id: Self.emptiedKey(report.id))
+                    toast = "Bene: ora puoi aggiornare la misura dello spazio libero."
+                }
+            )
+        }
+    }
+
+    /// Chiave con cui si ricorda che Eliminati di recente è già stato svuotato dopo quell'operazione.
+    private static func emptiedKey(_ reportID: UUID) -> String {
+        "results.recentlyDeletedEmptied." + reportID.uuidString
     }
 
     // MARK: - Confronto prima/dopo

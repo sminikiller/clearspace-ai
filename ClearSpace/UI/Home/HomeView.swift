@@ -21,6 +21,7 @@ struct HomeView: View {
                     accessBanner
                     storageCards
                     potentialCard
+                    pendingDeletionCard
                     quickCleanupCard
                     similarShortcutCard
                     resumeCard
@@ -209,6 +210,42 @@ struct HomeView: View {
         }
     }
 
+    // MARK: - In attesa di conferma
+
+    /// Ciò che è già stato proposto per l'eliminazione libera spazio solo dopo la conferma: la scheda
+    /// lo ricorda, così la pulizia non resta a metà.
+    @ViewBuilder
+    private var pendingDeletionCard: some View {
+        let count = env.store.markedCount
+        if count > 0 {
+            VStack(alignment: .leading, spacing: 10) {
+                Label {
+                    Text("Pronto da liberare")
+                        .font(.headline)
+                } icon: {
+                    Image(systemName: "trash.circle.fill")
+                        .foregroundStyle(Theme.remove)
+                }
+                Text("\(Format.plural(count, "elemento proposto", "elementi proposti")) per l'eliminazione · \(Format.bytes(summary.markedBytes))")
+                    .font(.subheadline.weight(.medium))
+                Text("Sono nella scheda Revisione: nulla viene eliminato finché non confermi. Lì puoi ancora ripristinare ciò che vuoi tenere.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    env.router.selectedTab = .review
+                } label: {
+                    Label("Apri la Revisione", systemImage: "checklist")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .accessibilityIdentifier("home.pendingReview")
+            }
+            .card()
+        }
+    }
+
     // MARK: - Pulizia rapida
 
     private var quickCleanupCard: some View {
@@ -252,8 +289,9 @@ struct HomeView: View {
     private var similarShortcutCard: some View {
         let stat = summary.stat(.similarPhotos)
         if stat.reviewableCount > 0 {
+            // Si entra subito nei gruppi da decidere, uno dopo l'altro: è il modo più rapido.
             NavigationLink {
-                GroupListView(collection: .similarPhotos)
+                GroupSequenceView(collection: .similarPhotos)
             } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "square.stack.3d.down.right.fill")
@@ -264,7 +302,7 @@ struct HomeView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Scegli le foto migliori")
                             .font(.headline)
-                        Text("\(Format.plural(stat.reviewableCount, "scatto simile", "scatti simili")) da decidere: tieni il migliore di ogni gruppo.")
+                        Text("\(Format.plural(stat.reviewableCount, "scatto simile", "scatti simili")) da decidere: un gruppo dopo l'altro, tieni il migliore.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }

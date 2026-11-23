@@ -285,6 +285,26 @@ final class AppEnvironment {
         await store.refreshSummaryNow()
     }
 
+    /// Cambia quanto devono somigliarsi due scatti per formare un gruppo e ricalcola i gruppi con
+    /// un'analisi rapida. Decisioni e stelle restano: appartengono ai singoli elementi.
+    func setSimilaritySensitivity(_ sensitivity: SimilaritySensitivity) async {
+        guard sensitivity != preferences.values.similaritySensitivity else { return }
+        preferences.update { $0.similaritySensitivity = sensitivity }
+        // Un'analisi già partita userebbe in parte le soglie precedenti: la si ferma e si riparte.
+        if scan.isRunning {
+            scan.cancel()
+            for _ in 0..<50 where scan.isRunning {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+        }
+        store.resetSimilarityChecks()
+        if photos.canRead && !scan.isRunning {
+            scan.start(deep: false)
+        } else {
+            scan.noteLibraryChanged()
+        }
+    }
+
     /// Revoca l'accesso a una cartella e toglie i suoi elementi dall'indice. I file non vengono toccati.
     func removeFolder(_ id: UUID) {
         store.removeMissing(inFolder: id, keeping: [])

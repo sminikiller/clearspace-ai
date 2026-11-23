@@ -182,8 +182,11 @@ enum GuideBook {
                     "«Avvia pulizia intelligente» apre lo swipe con gli elementi che conviene rivedere per primi: duplicati certi, video grandi, screenshot vecchi e così via, nell'ordine «Consigliati».",
                     "«Scegli quanti elementi rivedere» decide la lunghezza della sessione: 25, 50, 100 o 200 elementi."
                 ]),
+                section("Pronto da liberare", [
+                    "Se hai proposto qualcosa per l'eliminazione ma non hai ancora confermato, sotto lo spazio recuperabile compare questa scheda: quanti elementi e quanto spazio aspettano nella Revisione. «Apri la Revisione» ti porta lì. Finché non confermi non viene eliminato nulla."
+                ]),
                 section("Scegli le foto migliori", [
-                    "Se ci sono gruppi di foto simili ancora da decidere compare questa scheda: porta direttamente all'elenco dei gruppi, dove per ogni gruppo tieni il migliore."
+                    "Se ci sono gruppi di foto simili ancora da decidere compare questa scheda: apre subito i gruppi uno dopo l'altro, a partire da quello che libera più spazio. In ogni gruppo tieni la migliore e compare da solo il gruppo successivo (vedi il capitolo sulla galleria)."
                 ]),
                 section("Riprendi da dove eri rimasto", [
                     "Se chiudi uno swipe a metà, la sessione viene salvata. «Riprendi» la riapre dall'elemento in cui eri; «Scarta sessione» la cancella (le scelte già fatte restano)."
@@ -203,7 +206,7 @@ enum GuideBook {
             sections: [
                 section("Le fasi", points: [
                     "A · Metadati: date, tipi, dimensioni. Non scarica nulla ed è incrementale: riusa i dati degli elementi che non sono cambiati.",
-                    "B · Anteprime: nitidezza, luminosità, impronta percettiva, testo degli screenshot (OCR), foto simili, probabili duplicati e scelta dello scatto migliore.",
+                    "B · Anteprime: nitidezza, luminosità, impronta percettiva, testo degli screenshot (OCR), foto simili, probabili duplicati e scelta dello scatto migliore. Più foto vengono esaminate insieme, su più processori.",
                     "C · Analisi approfondita: impronta SHA-256 degli originali, solo per i possibili duplicati, versioni dei documenti e analisi degli audio.",
                     "D · Raccomandazioni: riepilogo, priorità di revisione, spazio potenziale.",
                     "E · Esecuzione: avviene solo dalla Revisione, dopo la tua conferma."
@@ -340,7 +343,7 @@ enum GuideBook {
             sections: [
                 section("Come nascono i gruppi", points: [
                     "Raffiche: le sequenze riconosciute da iOS.",
-                    "Foto simili: scatti fatti entro pochi minuti l'uno dall'altro e confrontati con le impronte visive di Vision; se manca l'impronta si usa l'impronta percettiva delle anteprime.",
+                    "Foto simili: scatti fatti entro pochi minuti l'uno dall'altro e confrontati con le impronte visive di Vision; se manca l'impronta si usa l'impronta percettiva delle anteprime. Quanto devono somigliarsi lo decidi in Impostazioni → Foto simili (Rigorosa, Normale, Ampia).",
                     "Duplicati esatti: stesso contenuto, verificato sull'originale con l'impronta SHA-256.",
                     "Probabili duplicati: anteprime identiche, ma originale non verificato (ad esempio perché è solo su iCloud).",
                     "Video simili, versioni dello stesso documento e registrazioni simili funzionano allo stesso modo con criteri adatti."
@@ -383,10 +386,19 @@ enum GuideBook {
             sections: [
                 section("Come si apre", points: [
                     "Esplora → Foto → Foto simili (o Foto duplicate) → tocca un gruppo.",
-                    "Dalla Home: «Scegli le foto migliori».",
+                    "Dalla Home: «Scegli le foto migliori» apre i gruppi uno dopo l'altro.",
                     "Nello swipe: «Griglia» sopra la striscia.",
                     "Nel confronto: il pulsante con i quadratini in alto."
                 ]),
+                section("L'elenco dei gruppi", points: [
+                    "Prima vengono i gruppi ancora da decidere, da quello che libera più spazio; quelli in cui ogni foto è già conservata, proposta o protetta finiscono in fondo con l'etichetta «Deciso».",
+                    "In cima, «Decidi un gruppo dopo l'altro» dice quanti gruppi restano e quanto spazio potresti liberare. Se sono tutti decisi diventa «Rivedi i gruppi uno dopo l'altro», per ricontrollarli."
+                ]),
+                section("Un gruppo dopo l'altro", [
+                    "Si apre la galleria del primo gruppo da decidere, con «Gruppo 1 di N» in alto e una barra di avanzamento. Dopo «Tieni solo la migliore» (o «Tieni solo le tue migliori», «Tieni tutte») compare da solo il gruppo successivo.",
+                    "«Salta», in alto a destra, lascia il gruppo da decidere e passa al prossimo. Se hai già deciso tutte le foto una per una, il pulsante diventa «Avanti».",
+                    "Alla fine un riepilogo dice quanti gruppi hai deciso e quanti saltato, con «Vai alla revisione» per controllare ciò che hai scartato. Funziona anche per i video simili e per i duplicati."
+                ], tip: "È il modo più veloce per sistemare tante foto simili: in ogni gruppo bastano uno sguardo al consiglio e un tocco."),
                 section("In alto", points: [
                     "Il riquadro del consiglio, con le tue stelle e il motivo.",
                     "L'ordine: «Ordine di scatto» oppure «Prima le migliori» (prima le stelle, poi il voto più alto).",
@@ -689,7 +701,7 @@ enum GuideBook {
                 ]),
                 section("L'esito", [
                     "Eliminati correttamente, operazioni non riuscite, in attesa ed esclusi, lo spazio recuperato e, se misurato, l'aumento dello spazio libero. Gli elementi non riusciti restano in lista per riprovare.",
-                    "Lo spazio delle foto si libera davvero quando svuoti Eliminati di recente nell'app Foto."
+                    "Lo spazio delle foto si libera davvero quando svuoti Eliminati di recente nell'app Foto: la sezione «Libera davvero lo spazio» spiega come e con «Apri l'app Foto» la apre. iOS non permette alle app di svuotare quell'album da sole."
                 ], tip: "Prima di confermare, l'app ricontrolla ogni elemento: se nel frattempo è stato protetto o non è più nella lista, viene escluso.")
             ],
             tutorialID: "review",
@@ -704,6 +716,9 @@ enum GuideBook {
                 section("Attività e spazio", points: [
                     "Elementi esaminati, conservati, proposti, rimandati, eliminati e operazioni non riuscite.",
                     "Spazio effettivamente recuperato sull'iPhone e su iCloud: conta solo ciò che è stato davvero eliminato."
+                ]),
+                section("Libera davvero lo spazio", [
+                    "Per 30 giorni dopo un'eliminazione di foto e video compare questo promemoria: gli elementi sono in Eliminati di recente e occupano ancora spazio. «Apri l'app Foto» la apre; lì scegli Eliminati di recente, Seleziona ed Elimina tutto. Quando l'hai fatto tocca «L'ho già svuotato» e poi «Aggiorna la misura»."
                 ]),
                 section("Confronto prima/dopo", [
                     "Spazio libero prima e dopo l'ultima operazione e adesso. Dopo la sincronizzazione con iCloud e lo svuotamento di Eliminati di recente il valore può cambiare: «Aggiorna la misura» lo rilegge."
@@ -847,6 +862,12 @@ enum GuideBook {
                     "Pausa con batteria scarica o dispositivo caldo.",
                     "Includi le foto nascoste nell'analisi (restano protette)."
                 ]),
+                section("Foto simili", points: [
+                    "Rigorosa: solo scatti quasi identici, fatti a pochi secondi di distanza. Gruppi più piccoli.",
+                    "Normale (consigliata): scatti dello stesso soggetto fatti entro pochi minuti.",
+                    "Ampia: anche inquadrature un po' diverse o scatti più distanti nel tempo. Gruppi più grandi.",
+                    "Cambiandola parte un'analisi rapida che ricalcola i gruppi; decisioni e stelle restano."
+                ]),
                 section("Revisione", points: [
                     "Riproduci i video automaticamente (senza audio).",
                     "Foto nitide anche con la rete cellulare: nel confronto e a tutto schermo, una alla volta, mai con Dati ridotti."
@@ -897,7 +918,10 @@ enum GuideBook {
                     "Perché sono uguali solo nelle anteprime. Consenti il download degli originali nelle opzioni dell'analisi per verificarli e trasformarli in duplicati esatti."
                 ]),
                 section("Ho eliminato ma lo spazio non aumenta", [
-                    "Le foto restano 30 giorni in Eliminati di recente: svuotalo nell'app Foto. Con iCloud lo spazio si aggiorna dopo la sincronizzazione. In Risultati usa «Aggiorna la misura»."
+                    "Le foto restano 30 giorni in Eliminati di recente: svuotalo nell'app Foto (in Risultati «Apri l'app Foto» ti ci porta). Con iCloud lo spazio si aggiorna dopo la sincronizzazione. In Risultati usa «Aggiorna la misura»."
+                ]),
+                section("I gruppi di foto simili sono troppo grandi o troppo piccoli", [
+                    "Cambia la sensibilità in Impostazioni → Foto simili: «Rigorosa» unisce solo scatti quasi identici, «Ampia» anche quelli con piccole differenze. I gruppi si ricalcolano da soli con un'analisi rapida."
                 ]),
                 section("Un elemento non si può proporre", [
                     "È protetto (preferito, nascosto, in un album, cartella o periodo protetto, o protetto da te). Puoi sbloccarlo dai Dettagli."
@@ -936,7 +960,8 @@ enum GuideBook {
                     "Tocco: porta sulla carta · Tieni premuto: menu · Griglia · Confronta · Tieni la migliore · Tieni solo questa."
                 ]),
                 section("Galleria e griglie", points: [
-                    "Tocco: seleziona · Trascina in orizzontale: selezione multipla (anche su più righe) · Parti da una selezionata: deseleziona · Tieni premuto: anteprima e menu."
+                    "Tocco: seleziona · Trascina in orizzontale: selezione multipla (anche su più righe) · Parti da una selezionata: deseleziona · Tieni premuto: anteprima e menu.",
+                    "Un gruppo dopo l'altro: Tieni solo la migliore = passa al gruppo successivo · Salta = lascialo da decidere · Avanti = prossimo gruppo già deciso."
                 ]),
                 section("Confronto", points: [
                     "Doppio tocco: zoom ×3 · Due dita: zoom libero · Trascina: sposta l'ingrandimento · Scorri in orizzontale: foto vicina · Riduci."

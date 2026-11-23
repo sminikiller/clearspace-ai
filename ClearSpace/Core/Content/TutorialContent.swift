@@ -10,7 +10,7 @@ enum TutorialEvent: String, CaseIterable, Sendable {
     case videoPause, videoAudio, videoSpeed, videoSeek
     // Simili: striscia, galleria, stelle
     case stripSelect, stripMenu, keepBest, keepOnlyCurrent
-    case openGallery, dragSelect, quickSelect, galleryOrder, galleryMenu, starBest, removeStar
+    case openGallery, dragSelect, quickSelect, galleryOrder, galleryMenu, starBest, removeStar, groupSequence
     // Confronto
     case openCompare, compareZoom, compareStep, compareDecision
     // Esplora e griglie
@@ -269,7 +269,11 @@ enum TutorialCatalog {
                 task("gallery.keep", "Tieni solo le migliori",
                      howTo: "Tocca il pulsante verde in basso («Tieni solo la migliore» o «Tieni solo la tua migliore»).",
                      check: "Le foto scelte restano, le altre passano alla Revisione: compaiono con il cestino e più scure.",
-                     event: .keepBest)
+                     event: .keepBest),
+                task("gallery.sequence", "Decidi un gruppo dopo l'altro",
+                     howTo: "Nell'elenco delle Foto simili tocca «Decidi un gruppo dopo l'altro» (dalla Home: «Scegli le foto migliori»). In ogni gruppo tocca «Tieni solo la migliore», oppure «Salta» in alto per lasciarlo da decidere.",
+                     check: "In alto leggi «Gruppo 1 di N»; dopo la scelta compare da solo il gruppo successivo e alla fine il riepilogo.",
+                     event: .groupSequence)
             ]
         ),
         Tutorial(
