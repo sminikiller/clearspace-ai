@@ -58,7 +58,11 @@ struct ReviewView: View {
                 ArchiveWizardView(itemIDs: items.map { $0.id })
             }
             .fullScreenCover(item: $previewItem) { item in
-                ItemPreviewScreen(itemID: item.id, showsActions: false)
+                ItemPreviewScreen(
+                    itemID: item.id,
+                    itemIDs: ItemPreviewScreen.window(items.map { $0.id }, around: item.id),
+                    showsActions: false
+                )
             }
             .confirmationDialog(
                 "Annullare tutte le selezioni?",
@@ -97,11 +101,13 @@ struct ReviewView: View {
     private var list: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                lastReportBanner
-                InfoBanner(text: "Controlla l'elenco: puoi ripristinare ciò che vuoi tenere. L'eliminazione avviene solo dopo la conferma finale.")
+                // Prima ciò che sta per essere eliminato: con il testo grande le spiegazioni sopra
+                // spingevano l'elenco sotto le barre.
                 ForEach(sections) { section in
                     sectionView(section)
                 }
+                InfoBanner(text: "Tocca la freccia blu per tenere un elemento. Si elimina solo dopo la conferma finale.")
+                lastReportBanner
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 12)
@@ -227,47 +233,59 @@ struct ReviewView: View {
 
     private var bottomBar: some View {
         VStack(spacing: 8) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(Format.plural(items.count, "elemento selezionato", "elementi selezionati"))
-                        .font(.subheadline.weight(.semibold))
-                    Text("Sull'iPhone: \(Format.bytes(deviceBytes)) · Dimensione totale: \(Format.bytes(totalBytes))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            // Conteggio e «Archivia prima» su una riga se ci stanno: la barra resta bassa.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: 8) {
+                    summary
+                    Spacer(minLength: 8)
+                    archiveButton
                 }
-                Spacer()
+                VStack(alignment: .leading, spacing: 6) {
+                    summary
+                    archiveButton
+                }
             }
-            // Affiancati se ci stanno, uno sopra l'altro con il testo grande.
-            AdaptiveStack(spacing: 8) {
-                Button {
-                    env.recordTutorial(.archiveWizard)
-                    showsArchiveWizard = true
-                } label: {
-                    Label("Archivia prima", systemImage: "archivebox")
+            Button {
+                preparePlan()
+            } label: {
+                if isPreparing {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                } else {
+                    Label("Controlla ed elimina", systemImage: "trash")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
-
-                Button {
-                    preparePlan()
-                } label: {
-                    if isPreparing {
-                        ProgressView()
-                            .frame(maxWidth: .infinity)
-                    } else {
-                        Label("Controlla ed elimina", systemImage: "trash")
-                            .frame(maxWidth: .infinity)
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(Theme.remove)
-                .disabled(isPreparing)
             }
+            .buttonStyle(.borderedProminent)
+            .tint(Theme.remove)
             .controlSize(.large)
+            .disabled(isPreparing)
         }
         .padding(12)
         .background(.bar)
         .compactControlText()
+    }
+
+    private var summary: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("\(Format.plural(items.count, "elemento", "elementi")) da eliminare")
+                .font(.subheadline.weight(.semibold))
+            Text("Sull'iPhone: \(Format.bytes(deviceBytes)) · Dimensione totale: \(Format.bytes(totalBytes))")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var archiveButton: some View {
+        Button {
+            env.recordTutorial(.archiveWizard)
+            showsArchiveWizard = true
+        } label: {
+            Label("Archivia prima", systemImage: "archivebox")
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
     }
 
     private var deviceBytes: Int64 { items.reduce(0) { $0 + $1.deviceBytes } }

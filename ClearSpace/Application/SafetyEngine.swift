@@ -135,10 +135,12 @@ final class SafetyEngine {
 
     // MARK: - Piano di eliminazione
 
-    /// Prepara l'elenco completo di ciò che verrebbe eliminato, con gli effetti su iPhone e iCloud.
+    /// Prepara l'elenco di ciò che verrebbe eliminato, con gli effetti su iPhone e iCloud.
     /// Prima rilegge dal sistema dimensioni e disponibilità locale degli asset coinvolti.
-    func makePlan() async -> DeletionPlan {
-        let marked = store.markedItems()
+    /// - Parameter ids: se indicati, il piano comprende solo questi elementi (tra quelli proposti),
+    ///   ad esempio le foto scartate di un singolo gruppo; altrimenti tutta la lista di revisione.
+    func makePlan(only ids: Set<UUID>? = nil) async -> DeletionPlan {
+        let marked = store.markedItems().filter { ids?.contains($0.id) ?? true }
         let libraryItems = marked.filter { $0.source == .photoLibrary }
 
         if photos.canRead && !libraryItems.isEmpty {
@@ -173,7 +175,7 @@ final class SafetyEngine {
         }
 
         return PlanBuilder.build(
-            markedItems: store.markedItems(),
+            markedItems: store.markedItems().filter { ids?.contains($0.id) ?? true },
             evaluator: evaluator(),
             iCloudPhotos: preferences.values.iCloudPhotosState,
             canAccessPhotos: photos.canRead

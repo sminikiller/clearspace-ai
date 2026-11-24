@@ -61,6 +61,19 @@ final class SmokeTests: UITestCase {
         pause(2)
         capture("40b-galleria-del-gruppo")
 
+        // Scorrimenti storti come quelli di un pollice: la griglia scorre, le scelte non cambiano
+        let choices = counter.label
+        if gridCell(1).exists {
+            thumbScroll(from: gridCell(1), upward: true)
+            pause(1)
+            thumbScroll(from: gridCell(1), upward: false)
+            pause(1)
+            XCTAssertEqual(counter.label, choices, "Uno scorrimento in diagonale ha cambiato le scelte della galleria")
+        }
+
+        // «Elimina» chiede conferma; annullando l'avviso di iOS non cambia nulla
+        checkCancelledDeletion(counter: counter, expected: choices)
+
         // Confronto: tutte le foto del gruppo, lo scatto consigliato e il motivo
         let compare = app.buttons["Confronta"].firstMatch
         XCTAssertTrue(compare.waitForExistence(timeout: 5), "Nella galleria manca il pulsante Confronta")
@@ -311,8 +324,44 @@ final class SmokeTests: UITestCase {
         pause(1)
     }
 
-    /// Dalla striscia sotto la carta apre la griglia del gruppo: selezione trascinando il dito,
-    /// tocchi per deselezionare, stella sulla migliore, «Tieni solo la tua migliore» e annullamento.
+    /// «Elimina» nella galleria di un gruppo: prima la conferma di ClearSpace, poi quella di iOS.
+    /// Annullando quest'ultima non viene eliminato nulla e le scelte restano com'erano.
+    private func checkCancelledDeletion(counter: XCUIElement, expected: String) {
+        let delete = app.buttons["group.delete"]
+        guard delete.waitForExistence(timeout: 5), delete.isEnabled else {
+            XCTFail("Nella galleria manca «Elimina», oppure è spento (\(counter.label))")
+            return
+        }
+        delete.tap()
+        let confirm = app.buttons
+            .matching(NSPredicate(format: "label BEGINSWITH %@ AND label ENDSWITH %@", "Elimina ", " foto"))
+            .firstMatch
+        guard confirm.waitForExistence(timeout: 5) else {
+            capture("40c-conferma-mancante")
+            XCTFail("«Elimina» non chiede conferma")
+            return
+        }
+        pause(0.5)
+        capture("40c-conferma-elimina")
+        confirm.tap()
+        XCTAssertTrue(
+            tapSystemButton(["Don\u{2019}t Allow", "Don't Allow", "Non consentire"], timeout: 30),
+            "Manca la conferma di sistema di iOS"
+        )
+        XCTAssertTrue(
+            element(containing: "Eliminazione annullata").waitForExistence(timeout: 10),
+            "Dopo l'annullamento della conferma di iOS non compare il messaggio"
+        )
+        capture("40d-eliminazione-annullata")
+        XCTAssertTrue(
+            waitForLabel(counter, expected, timeout: 5),
+            "Dopo l'annullamento le scelte non sono tornate com'erano (\(counter.label))"
+        )
+    }
+
+    /// Dalla striscia sotto la carta apre la griglia del gruppo. Nello swipe la galleria segue le regole
+    /// della sessione: le foto scartate passano alla Revisione. Prova la proposta già pronta, il
+    /// trascinamento, i tocchi, la stella dal menu di una foto, «Scarta» e l'annullamento.
     /// Alla fine la foto con la stella resta conservata e le altre due tornano da decidere.
     private func reviewSimilarShotsInGrid() {
         let gridButton = app.buttons["Griglia"]
@@ -331,27 +380,35 @@ final class SmokeTests: UITestCase {
         pause(1.5)
         capture("38a-griglia")
 
-        // Trascinando il dito dalla prima alla terza anteprima si selezionano tutte e tre
+        // All'apertura la consigliata resta e le altre due sono da eliminare
+        XCTAssertTrue(
+            waitForLabel(counter, "2 da eliminare · 1 da tenere", timeout: 4),
+            "La proposta all'apertura non è quella attesa (\(counter.label))"
+        )
+
+        // Trascinando il dito dalla prima alla terza anteprima cambiano tutte e tre
         dragAcrossGrid(from: 0, to: 2)
         XCTAssertTrue(
-            waitForLabel(counter, "3 selezionate", timeout: 4),
-            "Il trascinamento non ha selezionato le tre foto (\(counter.label))"
+            waitForLabel(counter, "3 da eliminare · 0 da tenere", timeout: 4),
+            "Il trascinamento non ha cambiato le tre foto (\(counter.label))"
         )
         pause(0.5)
         capture("38b-griglia-trascinamento")
 
-        // Due tocchi deselezionano: resta solo la prima
+        // Due tocchi rimettono la seconda e la terza tra quelle da tenere
         gridCell(1).tap()
         gridCell(2).tap()
         XCTAssertTrue(
-            waitForLabel(counter, "1 selezionata", timeout: 4),
-            "I tocchi non hanno deselezionato le foto (\(counter.label))"
+            waitForLabel(counter, "1 da eliminare · 2 da tenere", timeout: 4),
+            "I tocchi non hanno cambiato la scelta delle foto (\(counter.label))"
         )
 
-        // La stella: la foto resta conservata e si riconosce
-        let star = app.buttons["Segna come migliori"]
+        // La stella dal menu della prima foto: resta conservata e si riconosce
+        gridCell(0).press(forDuration: 1.2)
+        let star = app.buttons["Segna come migliore"]
         guard star.waitForExistence(timeout: 5) else {
-            XCTFail("Nella griglia manca il pulsante per segnare la migliore")
+            capture("38c-menu-senza-stella")
+            XCTFail("Nel menu della foto manca «Segna come migliore»")
             return
         }
         star.tap()
@@ -362,12 +419,23 @@ final class SmokeTests: UITestCase {
         pause(1)
         capture("38c-griglia-stella")
 
-        // Tieni solo la tua migliore: le altre vanno in revisione e la griglia si chiude
-        let keepStarred = app.buttons["Tieni solo la tua migliore"]
+        // Le altre due tornano tra quelle da eliminare; «Scarta» decide il gruppo: nello swipe
+        // le foto vanno in revisione (nulla viene eliminato) e la griglia si chiude
+        gridCell(1).tap()
+        gridCell(2).tap()
+        XCTAssertTrue(
+            waitForLabel(counter, "2 da eliminare · 1 da tenere", timeout: 4),
+            "I tocchi non hanno rimesso le due foto tra quelle da eliminare (\(counter.label))"
+        )
+        let keepStarred = app.buttons["group.delete"]
         guard keepStarred.waitForExistence(timeout: 5) else {
-            XCTFail("Manca il pulsante per tenere solo la foto con la stella")
+            XCTFail("Nella griglia manca il pulsante per scartare le altre foto")
             return
         }
+        XCTAssertTrue(
+            keepStarred.label.hasPrefix("Scarta"),
+            "Nello swipe la galleria non deve eliminare subito (\(keepStarred.label))"
+        )
         keepStarred.tap()
         XCTAssertTrue(
             element(containing: "Sessione completata").waitForExistence(timeout: 10),
@@ -500,6 +568,31 @@ final class SmokeTests: UITestCase {
             goBack()
             return
         }
+        // A tutto schermo si passa alla foto vicina scorrendo di lato, come in Foto
+        if gridCell(1).waitForExistence(timeout: 10) {
+            gridCell(0).tap()
+            let first = app.navigationBars.matching(NSPredicate(format: "identifier BEGINSWITH %@", "1 di ")).firstMatch
+            if first.waitForExistence(timeout: 8) {
+                pause(1)
+                app.windows.firstMatch.swipeLeft()
+                let second = app.navigationBars.matching(NSPredicate(format: "identifier BEGINSWITH %@", "2 di ")).firstMatch
+                XCTAssertTrue(
+                    second.waitForExistence(timeout: 6),
+                    "A tutto schermo lo scorrimento di lato non porta alla foto vicina (\(currentTitle))"
+                )
+                pause(1)
+                capture("24a-tutto-schermo-foto-vicina")
+            } else {
+                capture("24a-tutto-schermo-senza-contatore")
+                XCTFail("A tutto schermo manca il contatore «1 di N» (\(currentTitle))")
+            }
+            let close = app.navigationBars.buttons["Chiudi"]
+            if close.waitForExistence(timeout: 3) {
+                close.tap()
+                pause(1)
+            }
+        }
+
         select.tap()
         if gridCell(0).waitForExistence(timeout: 5) && gridCell(2).exists {
             // Con almeno due righe il gesto scende anche di una riga: dalla prima cella alla sesta

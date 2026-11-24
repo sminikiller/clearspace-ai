@@ -153,6 +153,34 @@ class UITestCase: XCTestCase {
         start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.2)
     }
 
+    /// Scorrimento veloce e un po' storto che parte da un'anteprima, come quello di un pollice:
+    /// deve far scorrere la griglia, mai selezionare.
+    func thumbScroll(from cell: XCUIElement, upward: Bool) {
+        let start = cell.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let end = start.withOffset(CGVector(dx: upward ? 36 : -36, dy: upward ? -220 : 220))
+        start.press(forDuration: 0.02, thenDragTo: end, withVelocity: .fast, thenHoldForDuration: 0)
+    }
+
+    /// Apre il menu «…» in alto e tocca una voce. Se la voce manca chiude il menu.
+    @discardableResult
+    func chooseFromMenu(_ item: String) -> Bool {
+        let menu = app.buttons["Altre azioni"]
+        guard menu.waitForExistence(timeout: 3), menu.isHittable else {
+            XCTFail("Manca il menu «…» in alto")
+            return false
+        }
+        menu.tap()
+        let entry = app.buttons[item]
+        guard entry.waitForExistence(timeout: 3) else {
+            XCTFail("Nel menu «…» manca «\(item)»")
+            app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.92)).tap()
+            return false
+        }
+        entry.tap()
+        pause(0.8)
+        return true
+    }
+
     /// Tocca un pulsante di un avviso di sistema (permessi, conferma di eliminazione).
     @discardableResult
     func tapSystemButton(_ labels: [String], timeout: TimeInterval) -> Bool {

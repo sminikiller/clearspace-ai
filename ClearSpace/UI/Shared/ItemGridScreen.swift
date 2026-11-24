@@ -72,6 +72,9 @@ struct ItemGridScreen: View {
             isSelecting: isSelecting,
             minimumCellSide: 100,
             onOpen: { item in env.recordTutorial(.preview); previewItem = item },
+            onExpand: { item in env.recordTutorial(.preview); previewItem = item },
+            // Le griglie lunghe caricano da sole gli elementi successivi mentre si scorre.
+            onNearEnd: { loadMoreIfNeeded() },
             header: {
                 header
                 if items.isEmpty && !isLoading {
@@ -85,8 +88,9 @@ struct ItemGridScreen: View {
             },
             footer: {
                 if items.count > visibleCount {
+                    // Di solito non serve: gli elementi successivi arrivano da soli scorrendo.
                     Button("Mostra altri \(min(300, items.count - visibleCount))") {
-                        visibleCount += 300
+                        loadMoreIfNeeded()
                     }
                     .buttonStyle(.bordered)
                     .frame(maxWidth: .infinity)
@@ -115,7 +119,11 @@ struct ItemGridScreen: View {
             await reload()
         }
         .fullScreenCover(item: $previewItem) { item in
-            ItemPreviewScreen(itemID: item.id)
+            // A tutto schermo si scorre tra gli elementi della griglia, come in Foto.
+            ItemPreviewScreen(
+                itemID: item.id,
+                itemIDs: ItemPreviewScreen.window(items.prefix(visibleCount).map { $0.id }, around: item.id)
+            )
         }
         .toast($toast)
     }
@@ -227,6 +235,11 @@ struct ItemGridScreen: View {
     }
 
     // MARK: - Azioni
+
+    private func loadMoreIfNeeded() {
+        guard items.count > visibleCount else { return }
+        visibleCount += 300
+    }
 
     private func markSelection() {
         let result = env.safety.markForDeletion(Array(selection))

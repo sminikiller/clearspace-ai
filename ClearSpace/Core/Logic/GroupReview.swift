@@ -66,3 +66,84 @@ enum GroupReview {
         return min(position, count)
     }
 }
+
+/// Scelta in corso nella galleria di un gruppo: quali elementi eliminare e quali tenere.
+///
+/// All'apertura c'è una proposta: le decisioni già prese restano, si tengono le migliori (le stelle
+/// dell'utente o, se non ce ne sono, quella consigliata) e si propongono le altre. Ogni tocco
+/// dell'utente cambia un singolo elemento rispetto alla proposta. Nulla di tutto questo viene salvato
+/// finché non si conferma una scelta.
+enum GroupProposal {
+
+    /// Elementi da eliminare secondo la proposta iniziale.
+    /// - Proposti per l'eliminazione (o non riusciti) → da eliminare; conservati → da tenere.
+    /// - Stelle ed elementi protetti restano sempre.
+    /// - Da decidere o rimandati: si tengono le migliori e si propongono gli altri; senza stelle e senza
+    ///   consiglio non si propone nulla.
+    static func initialDeletion(
+        members: [IndexedItem],
+        suggestedID: UUID?,
+        isLocked: (IndexedItem) -> Bool
+    ) -> Set<UUID> {
+        let keepers = GroupChoice.preferredKeepers(members: members, suggestedID: suggestedID)
+        var result = Set<UUID>()
+        for member in members where !member.isStarred && !isLocked(member) {
+            switch member.reviewStatus {
+            case .markedForDeletion, .deletionFailed:
+                result.insert(member.id)
+            case .kept:
+                continue
+            case .unreviewed, .postponed:
+                if !keepers.isEmpty && !keepers.contains(member.id) {
+                    result.insert(member.id)
+                }
+            }
+        }
+        return result
+    }
+
+    /// La proposta con le scelte fatte a mano: `overrides` vale `true` per «elimina», `false` per «tieni».
+    /// Gli elementi bloccati non vengono mai eliminati.
+    static func deletion(proposal: Set<UUID>, overrides: [UUID: Bool], locked: Set<UUID>) -> Set<UUID> {
+        var result = proposal
+        for (id, deletes) in overrides {
+            if deletes {
+                result.insert(id)
+            } else {
+                result.remove(id)
+            }
+        }
+        return result.subtracting(locked)
+    }
+
+    /// Scelte a mano che, applicate alla proposta, danno `deletion`. Gli elementi bloccati restano fuori.
+    static func overrides(
+        for deletion: Set<UUID>,
+        proposal: Set<UUID>,
+        memberIDs: [UUID],
+        locked: Set<UUID>
+    ) -> [UUID: Bool] {
+        var result: [UUID: Bool] = [:]
+        for id in memberIDs where !locked.contains(id) {
+            let deletes = deletion.contains(id)
+            if deletes != proposal.contains(id) {
+                result[id] = deletes
+            }
+        }
+        return result
+    }
+
+    /// Divide i membri, nell'ordine del gruppo, tra quelli da tenere e quelli da eliminare.
+    static func split(memberIDs: [UUID], deletion: Set<UUID>) -> (keep: [UUID], delete: [UUID]) {
+        var keep: [UUID] = []
+        var delete: [UUID] = []
+        for id in memberIDs {
+            if deletion.contains(id) {
+                delete.append(id)
+            } else {
+                keep.append(id)
+            }
+        }
+        return (keep, delete)
+    }
+}

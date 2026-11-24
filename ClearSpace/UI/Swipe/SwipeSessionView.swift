@@ -86,7 +86,8 @@ struct SwipeSessionView: View {
         }
         .sheet(item: $gallery) { target in
             NavigationStack {
-                GroupSelectionView(groupID: target.groupID, closesAfterDecision: true)
+                // Nello swipe le scelte passano dalla Revisione, come il resto della sessione.
+                GroupSelectionView(groupID: target.groupID, closesAfterDecision: true, deletesDirectly: false)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
                             Button("Chiudi") {

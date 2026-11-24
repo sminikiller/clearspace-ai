@@ -314,24 +314,18 @@ final class LayoutTests: UITestCase {
                 dragAcrossGrid(from: 0, to: 1)
             }
             checkLayout("L26-galleria-selezione")
-            checkReachable(app.buttons["Segna come migliori"], "Galleria: «Migliore»")
-            checkReachable(app.buttons["Proponi le selezionate per l'eliminazione"], "Galleria: «Elimina»")
+            checkReachable(app.buttons["group.delete"], "Galleria: «Elimina»")
+            checkReachable(app.buttons["group.keepAll"], "Galleria: «Tieni tutte»")
             scroll(by: 0.45)
             checkLayout("L26b-galleria-scorsa")
 
-            // Tutte le foto del gruppo vanno in revisione: più avanti vengono ripristinate.
-            let selectAll = app.buttons["Seleziona tutte"]
-            bringIntoView(selectAll)
-            if selectAll.exists && selectAll.isHittable {
-                selectAll.tap()
-                let propose = app.buttons["Proponi le selezionate per l'eliminazione"]
-                if propose.exists && propose.isHittable {
-                    propose.tap()
+            // Tutte le foto del gruppo vanno in revisione, senza eliminarle: più avanti vengono ripristinate.
+            if chooseFromMenu("Segna tutte da eliminare") {
+                checkLayout("L26c-galleria-tutte-da-eliminare")
+                if chooseFromMenu("Aggiungi alla Revisione") {
                     pause(1)
-                    checkLayout("L26c-galleria-proposte")
+                    checkLayout("L26d-galleria-proposte")
                 }
-            } else {
-                XCTFail("Galleria: «Seleziona tutte» non si raggiunge")
             }
             let compare = app.buttons["Confronta"].firstMatch
             if compare.exists && compare.isHittable {

@@ -196,6 +196,8 @@ struct BarActionButton: View {
     var accessibilityTitle: String?
     let action: () -> Void
 
+    @Environment(\.isEnabled) private var isEnabled
+
     var body: some View {
         Button(action: action) {
             VStack(spacing: 3) {
@@ -212,6 +214,9 @@ struct BarActionButton: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 4)
+            // I colori sono scelti a mano: senza questo, in tema scuro un pulsante disattivato
+            // sembrerebbe attivo.
+            .opacity(isEnabled ? 1 : 0.35)
         }
         .buttonStyle(.bordered)
         .tint(.gray)

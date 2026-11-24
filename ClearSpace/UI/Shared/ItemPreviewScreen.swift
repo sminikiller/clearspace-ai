@@ -2,31 +2,59 @@ import AVKit
 import QuickLook
 import SwiftUI
 
-/// Anteprima a tutto schermo di un elemento: foto ingrandibile, video, documento o audio.
+/// Anteprima a tutto schermo: foto ingrandibile, video, documento o audio. Con più elementi si scorre
+/// in orizzontale dall'uno all'altro, come nell'app Foto.
 /// Le azioni disponibili cambiano soltanto lo stato di revisione: da qui non si elimina nulla.
 struct ItemPreviewScreen: View {
-    let itemID: UUID
+    /// Elementi tra cui si scorre, nell'ordine in cui compaiono nella schermata di partenza.
+    let itemIDs: [UUID]
     /// Mostra i pulsanti Conserva / Da eliminare. Va disattivato dove la scelta avviene altrove.
     var showsActions = true
 
     @Environment(AppEnvironment.self) private var env
     @Environment(\.dismiss) private var dismiss
+    @State private var currentID: UUID?
     @State private var showsDetails = false
     @State private var toast: String?
+
+    /// - Parameters:
+    ///   - itemID: elemento da mostrare per primo.
+    ///   - itemIDs: elementi tra cui scorrere; se mancano (o non contengono `itemID`) si vede solo quello.
+    init(itemID: UUID, itemIDs: [UUID]? = nil, showsActions: Bool = true) {
+        if let itemIDs, itemIDs.contains(itemID) {
+            self.itemIDs = itemIDs
+        } else {
+            self.itemIDs = [itemID]
+        }
+        self.showsActions = showsActions
+        self._currentID = State(initialValue: itemID)
+    }
+
+    /// Elementi attorno a quello aperto: bastano per scorrere a lungo senza preparare migliaia di pagine.
+    nonisolated static func window(_ ids: [UUID], around id: UUID, radius: Int = 150) -> [UUID] {
+        guard let index = ids.firstIndex(of: id) else { return [id] }
+        let low = max(0, index - radius)
+        let high = min(ids.count - 1, index + radius)
+        return Array(ids[low...high])
+    }
+
+    private var activeID: UUID {
+        currentID ?? itemIDs[0]
+    }
 
     var body: some View {
         let _ = env.store.revision
         NavigationStack {
             Group {
-                if let item = env.store.item(itemID) {
+                if let item = env.store.item(activeID) {
                     VStack(spacing: 0) {
-                        media(for: item)
+                        pages
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                         if showsActions {
                             actionBar(for: item)
                         }
                     }
-                    .navigationTitle(item.displayTitle)
+                    .navigationTitle(title(for: item))
                 } else {
                     ContentUnavailableView(
                         "Elemento non più disponibile",
@@ -49,19 +77,69 @@ struct ItemPreviewScreen: View {
                 }
             }
             .sheet(isPresented: $showsDetails) {
-                ItemDetailView(itemID: itemID)
+                ItemDetailView(itemID: activeID)
             }
             .toast($toast)
         }
     }
 
+    /// "3 di 12" quando si può scorrere, altrimenti il nome dell'elemento.
+    private func title(for item: IndexedItem) -> String {
+        guard itemIDs.count > 1, let index = itemIDs.firstIndex(of: item.id) else { return item.displayTitle }
+        return "\(index + 1) di \(itemIDs.count)"
+    }
+
     @ViewBuilder
-    private func media(for item: IndexedItem) -> some View {
+    private var pages: some View {
+        if itemIDs.count < 2 {
+            if let item = env.store.item(activeID) {
+                media(for: item, isActive: true)
+            }
+        } else {
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal) {
+                    LazyHStack(spacing: 0) {
+                        ForEach(itemIDs, id: \.self) { id in
+                            page(for: id)
+                                .containerRelativeFrame([.horizontal, .vertical])
+                                .clipped()
+                                .id(id)
+                        }
+                    }
+                    .scrollTargetLayout()
+                }
+                .scrollTargetBehavior(.paging)
+                .scrollPosition(id: $currentID)
+                .scrollIndicators(.hidden)
+                .background(Color.black)
+                .onAppear {
+                    proxy.scrollTo(activeID)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func page(for id: UUID) -> some View {
+        if let item = env.store.item(id) {
+            media(for: item, isActive: id == activeID)
+        } else {
+            ZStack {
+                Color.black
+                Text("Elemento non più disponibile")
+                    .font(.subheadline)
+                    .foregroundStyle(.white)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func media(for item: IndexedItem, isActive: Bool) -> some View {
         switch item.category {
         case .photo:
-            ZoomablePhotoView(item: item)
+            ZoomablePhotoView(item: item, isActive: isActive)
         case .video:
-            VideoPlaybackView(item: item)
+            VideoPlaybackView(item: item, isActive: isActive)
         case .audio:
             AudioPlaybackView(item: item)
         case .pdf, .office, .archive, .otherDocument, .unknown:
@@ -85,7 +163,7 @@ struct ItemPreviewScreen: View {
 
             Button {
                 env.safety.apply(.keep, to: item.id)
-                dismiss()
+                advanceOrDismiss()
             } label: {
                 Label("Conserva", systemImage: "checkmark")
                     .lineLimit(1)
@@ -109,9 +187,20 @@ struct ItemPreviewScreen: View {
         case .appliedWithCaution:
             toast = "Aggiunto alla revisione. Contenuto potenzialmente importante: verrà evidenziato."
         case .applied:
-            dismiss()
+            advanceOrDismiss()
         case nil:
             toast = "Elemento non più disponibile."
+        }
+    }
+
+    /// Dopo una scelta si passa all'elemento successivo; con un solo elemento si chiude.
+    private func advanceOrDismiss() {
+        guard itemIDs.count > 1, let index = itemIDs.firstIndex(of: activeID), index + 1 < itemIDs.count else {
+            dismiss()
+            return
+        }
+        withAnimation {
+            currentID = itemIDs[index + 1]
         }
     }
 }
@@ -120,6 +209,8 @@ struct ItemPreviewScreen: View {
 /// lo dice e permette di scaricare quella nitida: è qui che si controlla se uno scatto è riuscito.
 struct ZoomablePhotoView: View {
     let item: IndexedItem
+    /// La pagina in vista. Le pagine accanto si preparano con una versione più leggera e senza rete.
+    var isActive = true
 
     @Environment(AppEnvironment.self) private var env
     @State private var loader = DisplayImageLoader()
@@ -127,6 +218,7 @@ struct ZoomablePhotoView: View {
     private struct LoadKey: Equatable {
         let id: UUID
         let attempt: Int
+        let isActive: Bool
     }
 
     var body: some View {
@@ -151,9 +243,9 @@ struct ZoomablePhotoView: View {
                 .padding(.horizontal, 12)
                 .padding(.bottom, 16)
         }
-        .task(id: LoadKey(id: item.id, attempt: loader.attempt)) {
+        .task(id: LoadKey(id: item.id, attempt: loader.attempt, isActive: isActive)) {
             // A tutto schermo si sta esaminando proprio questa foto: va mostrata nitida.
-            await loader.load(item: item, pixelSide: 3_000, env: env, inspecting: true)
+            await loader.load(item: item, pixelSide: isActive ? 3_000 : 1_600, env: env, inspecting: isActive)
         }
     }
 }
@@ -161,6 +253,8 @@ struct ZoomablePhotoView: View {
 /// Riproduzione di un video, con velocità doppia per scorrerlo rapidamente.
 struct VideoPlaybackView: View {
     let item: IndexedItem
+    /// La pagina in vista: scorrendo via, il video si ferma.
+    var isActive = true
 
     @Environment(AppEnvironment.self) private var env
     @State private var player: AVPlayer?
@@ -221,6 +315,11 @@ struct VideoPlaybackView: View {
                 player = AVPlayer(playerItem: playerItem)
             } else {
                 isUnavailable = true
+            }
+        }
+        .onChange(of: isActive) { _, active in
+            if !active {
+                player?.pause()
             }
         }
         .onDisappear {

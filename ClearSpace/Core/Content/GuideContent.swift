@@ -134,8 +134,8 @@ enum GuideBook {
                     "Tutte le analisi avvengono sul dispositivo: foto, video e documenti non vengono mai inviati a un server."
                 ]),
                 section("La regola d'oro: decidi sempre tu", [
-                    "Nessun gesto e nessun pulsante elimina davvero qualcosa. Proporre un elemento significa solo metterlo nella lista della scheda Revisione.",
-                    "Si elimina solo dalla Revisione, dopo una schermata di conferma che mostra esattamente cosa succede su iPhone e su iCloud, e dopo l'ulteriore conferma di iOS per foto e video."
+                    "Nessun gesto elimina da solo. Negli swipe e nelle griglie proporre un elemento significa metterlo nella lista della scheda Revisione.",
+                    "Si elimina dalla Revisione oppure con «Elimina» nella galleria di un gruppo: prima una conferma di ClearSpace che dice cosa succede su iPhone e su iCloud, poi quella di iOS per foto e video. Foto e video eliminati restano 30 giorni in «Eliminati di recente»."
                 ], points: [
                     "Puoi annullare ogni scelta prima della conferma finale.",
                     "Le foto eliminate restano per 30 giorni in Eliminati di recente dell'app Foto.",
@@ -209,7 +209,7 @@ enum GuideBook {
                     "B · Anteprime: nitidezza, luminosità, impronta percettiva, testo degli screenshot (OCR), foto simili, probabili duplicati e scelta dello scatto migliore. Più foto vengono esaminate insieme, su più processori.",
                     "C · Analisi approfondita: impronta SHA-256 degli originali, solo per i possibili duplicati, versioni dei documenti e analisi degli audio.",
                     "D · Raccomandazioni: riepilogo, priorità di revisione, spazio potenziale.",
-                    "E · Esecuzione: avviene solo dalla Revisione, dopo la tua conferma."
+                    "E · Esecuzione: avviene solo dopo la tua conferma, dalla Revisione o dalla galleria di un gruppo."
                 ]),
                 section("Analisi completa e rapida", [
                     "«Analisi completa» esegue tutte le fasi. «Rapida» rilegge solo ciò che è nuovo o cambiato: è quella che parte da sola quando la libreria cambia.",
@@ -382,7 +382,7 @@ enum GuideBook {
             id: "gallery",
             title: "La galleria «Scegli le migliori»",
             systemImage: "square.grid.3x3",
-            summary: "Tutte le foto di un gruppo in griglia, selezione rapida come in Foto e stelle.",
+            summary: "Tutte le foto di un gruppo: la migliore resta, le altre si eliminano con un tocco.",
             sections: [
                 section("Come si apre", points: [
                     "Esplora → Foto → Foto simili (o Foto duplicate) → tocca un gruppo.",
@@ -395,34 +395,28 @@ enum GuideBook {
                     "In cima, «Decidi un gruppo dopo l'altro» dice quanti gruppi restano e quanto spazio potresti liberare. Se sono tutti decisi diventa «Rivedi i gruppi uno dopo l'altro», per ricontrollarli."
                 ]),
                 section("Un gruppo dopo l'altro", [
-                    "Si apre la galleria del primo gruppo da decidere, con «Gruppo 1 di N» in alto e una barra di avanzamento. Dopo «Tieni solo la migliore» (o «Tieni solo le tue migliori», «Tieni tutte») compare da solo il gruppo successivo.",
+                    "Si apre la galleria del primo gruppo da decidere, con «Gruppo 1 di N» in alto e una barra di avanzamento. Dopo «Elimina» (o «Tieni tutte») compare da solo il gruppo successivo.",
                     "«Salta», in alto a destra, lascia il gruppo da decidere e passa al prossimo. Se hai già deciso tutte le foto una per una, il pulsante diventa «Avanti».",
-                    "Alla fine un riepilogo dice quanti gruppi hai deciso e quanti saltato, con «Vai alla revisione» per controllare ciò che hai scartato. Funziona anche per i video simili e per i duplicati."
-                ], tip: "È il modo più veloce per sistemare tante foto simili: in ogni gruppo bastano uno sguardo al consiglio e un tocco."),
-                section("In alto", points: [
-                    "Il riquadro del consiglio, con le tue stelle e il motivo.",
-                    "L'ordine: «Ordine di scatto» oppure «Prima le migliori» (prima le stelle, poi il voto più alto).",
-                    "Scelte rapide: Seleziona tutte, Tutte tranne la consigliata (o tranne le tue migliori), Deseleziona."
+                    "Alla fine un riepilogo dice quanti gruppi hai deciso, quanti saltato e quante foto hai eliminato, con «Apri l'app Foto» per svuotare «Eliminati di recente». Funziona anche per i video simili e per i duplicati."
+                ], tip: "È il modo più veloce per sistemare tante foto simili: in ogni gruppo bastano uno sguardo al consiglio e un tocco su «Elimina»."),
+                section("La scelta già pronta", [
+                    "All'apertura la migliore resta e le altre sono da eliminare: la migliore è quella con la tua stella oppure, se non ne hai messe, quella consigliata (con le scintille). Ciò che avevi già deciso resta com'era.",
+                    "Ogni foto ha un solo segno, in basso a destra: verde = resta, cestino rosso = si elimina, lucchetto = protetta. Le foto da eliminare appaiono più scure."
+                ], points: [
+                    "Un tocco cambia la scelta di una foto.",
+                    "Trascina il dito in orizzontale per cambiare tante foto insieme, anche scendendo su più righe; vicino ai bordi la griglia scorre da sola.",
+                    "Un gesto verticale o in diagonale fa sempre scorrere la griglia, anche se è ancora in movimento.",
+                    "Le frecce in alto a destra di ogni anteprima la aprono a tutto schermo: lì scorri di lato tra tutte le foto del gruppo."
                 ]),
-                section("Selezionare", points: [
-                    "Tocca una foto per selezionarla o deselezionarla.",
-                    "Trascina il dito in orizzontale: selezioni tutte le foto tra la prima e quella sotto il dito, anche scendendo su più righe. Vicino ai bordi la griglia scorre da sola.",
-                    "Se cominci da una foto già selezionata, il trascinamento deseleziona.",
-                    "Un gesto verticale o in diagonale fa scorrere la griglia."
-                ]),
-                section("Le anteprime", points: [
-                    "Voto da 0 a 100 (o durata per i video) in basso a sinistra.",
-                    "Stella gialla o scintille in alto a destra.",
-                    "Stato in alto a sinistra; le foto proposte appaiono più scure.",
-                    "Tieni premuto: anteprima grande e menu (Vedi a tutto schermo, Confronta da qui, Segna come migliore, Conserva, Proponi per l'eliminazione)."
-                ]),
-                section("La barra in basso", points: [
-                    "«N selezionate» e «Confronta».",
-                    "Migliore: mette la stella alle selezionate e le conserva (diventa «Togli stella» se sono già tutte stellate).",
-                    "Tieni: conserva le selezionate. Elimina: le propone per l'eliminazione.",
-                    "Pulsante verde: «Tieni solo la migliore», «Tieni solo la tua migliore» o «Tieni solo le tue N migliori».",
-                    "Menu «…» in alto: Tieni tutte, Togli tutte le stelle."
-                ], tip: "Aperta dallo swipe, la galleria si chiude da sola dopo una scelta su tutto il gruppo e la sessione prosegue.")
+                section("Elimina", [
+                    "In basso leggi «N da eliminare · M da tenere». «Elimina N» chiede una conferma con lo spazio liberato e gli effetti su iCloud, poi iOS chiede la sua: le foto vanno in «Eliminati di recente», dove restano 30 giorni.",
+                    "«Tieni tutte» conserva tutto il gruppo. Se annulli l'avviso di iOS non cambia nulla."
+                ], tip: "Aperta dallo swipe, la galleria segue le regole della sessione: il pulsante diventa «Scarta N», le foto scartate passano alla Revisione e la galleria si chiude da sola."),
+                section("In alto e nel menu", points: [
+                    "Il consiglio con il motivo e «Confronta» per vedere le foto in grande, una accanto all'altra.",
+                    "Menu «…»: Aggiungi alla Revisione (decidi ora, elimina più tardi insieme ad altro), Segna tutte da eliminare, Ripristina la proposta, l'ordine («Ordine di scatto» o «Prima le migliori»), Togli tutte le stelle.",
+                    "Tieni premuta una foto: anteprima grande e menu (Vedi a tutto schermo, Confronta da qui, Segna come migliore, Tieni o Elimina)."
+                ])
             ],
             tutorialID: "gallery",
             destination: .similarGroups
@@ -436,8 +430,8 @@ enum GuideBook {
                 section("La foto grande", points: [
                     "In alto: «N di M», «La tua migliore» e «Consigliata».",
                     "Doppio tocco: ingrandisce tre volte; di nuovo per tornare normale. Due dita: ingrandimento libero fino a otto volte.",
-                    "Con lo zoom attivo trascini per spostarti; «Riduci» torna all'intera foto.",
-                    "Senza zoom, scorri in orizzontale per passare alla foto vicina.",
+                    "Con lo zoom attivo trascini per spostarti; continuando oltre il bordo passi alla foto vicina. «Riduci» torna all'intera foto.",
+                    "Senza zoom la foto segue il dito: lasciala oltre un quarto di strada, o dai un colpo deciso, per passare a quella vicina.",
                     "Zoom condiviso: passando a un'altra foto l'ingrandimento resta sullo stesso punto, così vedi subito quale è più nitida.",
                     "I video si riproducono con gli stessi comandi della carta."
                 ]),
@@ -464,9 +458,9 @@ enum GuideBook {
             sections: [
                 section("La stella di ClearSpace", [
                     "La stella gialla segna le tue migliori di un gruppo. Una foto con la stella è sempre conservata e si riconosce ovunque: striscia, carta, galleria, confronto, griglie ed elenco dei gruppi.",
-                    "Le stelle prevalgono sul consiglio: il pulsante verde diventa «Tieni solo la tua migliore» o «Tieni solo le tue N migliori»."
+                    "Le stelle prevalgono sul consiglio: nella galleria le foto con la stella sono quelle che restano, e nello swipe e nel confronto il pulsante verde diventa «Tieni solo la tua migliore» o «Tieni solo le tue N migliori»."
                 ], points: [
-                    "Mettere la stella: galleria → seleziona → Migliore; menu di una foto → Segna come migliore; confronto → stella; striscia → tieni premuto → Segna come migliore.",
+                    "Mettere la stella: galleria → tieni premuta una foto → Segna come migliore; confronto → stella; striscia → tieni premuto → Segna come migliore.",
                     "Togliere la stella: gli stessi comandi, oppure il menu «…» → Togli tutte le stelle.",
                     "La stella sparisce da sola se proponi quella foto per l'eliminazione, la rimandi o annulli la decisione."
                 ]),
@@ -538,15 +532,15 @@ enum GuideBook {
                 section("Le anteprime", points: [
                     "Dimensione in basso a sinistra, durata in basso a destra.",
                     "In alto a sinistra: stella, lucchetto (protetto), nuvola (solo su iCloud), stato della decisione.",
-                    "Tocca un'anteprima per aprirla a tutto schermo."
+                    "Tocca un'anteprima per aprirla a tutto schermo: scorri di lato per passare alle altre."
                 ]),
                 section("La selezione", points: [
-                    "Tocca o trascina il dito in orizzontale per selezionare più elementi, come nella galleria.",
+                    "Tocca o trascina il dito in orizzontale per selezionare più elementi, come in Foto. Un gesto verticale o in diagonale fa sempre scorrere la griglia.",
                     "Seleziona tutto / Deseleziona tutto.",
                     "Da eliminare: propone le selezionate (le protette vengono saltate e il messaggio lo dice).",
                     "Conserva e Proteggi.",
                     "«Fine» esce dalla selezione."
-                ], tip: "Le griglie molto lunghe mostrano 300 elementi alla volta: «Mostra altri» carica i successivi.")
+                ], tip: "Nelle griglie molto lunghe gli elementi successivi arrivano da soli mentre scorri.")
             ],
             tutorialID: "explore",
             destination: .allPhotos
@@ -558,11 +552,12 @@ enum GuideBook {
             summary: "Guardare bene un elemento e conoscere tutto di lui.",
             sections: [
                 section("Anteprima a tutto schermo", points: [
+                    "Scorri in orizzontale per passare all'elemento vicino, come in Foto: dalla griglia tra gli elementi della griglia, dalla galleria tra le foto del gruppo, dalla Revisione tra quelli da eliminare.",
                     "Foto: ingrandisci con due dita o con il doppio tocco. Arriva prima un'anteprima e poi la versione nitida.",
                     "Video: lettore completo, con il pulsante della velocità.",
                     "Documenti: «Apri anteprima» con Quick Look.",
                     "Audio: forma d'onda (tocca un punto per spostarti) e riproduzione.",
-                    "In basso, quando previsti: Da eliminare e Conserva. In alto: Chiudi e «i» per i Dettagli."
+                    "In basso, quando previsti: Da eliminare e Conserva; dopo la scelta si passa da soli all'elemento successivo. In alto: Chiudi e «i» per i Dettagli."
                 ]),
                 section("Foto sfocate e iCloud", [
                     "Con «Ottimizza spazio iPhone» sul telefono resta spesso solo un'anteprima. L'app scarica la versione nitida quando la rete lo permette e lo dice con un avviso: «Scarico la versione nitida», «Anteprima a bassa qualità · Scarica quella nitida» (tocca per scaricarla), «serve una connessione», «Riprova».",
@@ -679,13 +674,16 @@ enum GuideBook {
             id: "review",
             title: "Revisione ed eliminazione",
             systemImage: "checklist",
-            summary: "La lista, la conferma, l'esito: l'unico punto da cui si elimina.",
+            summary: "La lista, la conferma, l'esito: da qui si elimina tutto ciò che hai proposto.",
             sections: [
                 section("La lista", points: [
                     "Sezioni per tipo: Foto, Video, File e documenti, Audio, Copie importate in ClearSpace, con numero e spazio.",
                     "Freccia blu su un'anteprima: ripristina quell'elemento. «Ripristina gruppo»: tutta la sezione. «Annulla tutto» in alto: tutta la lista.",
-                    "Tocca un'anteprima per guardarla. Lo scudo arancione segnala i contenuti potenzialmente importanti.",
-                    "In alto l'esito dell'ultima operazione, con «Vedi il resoconto»."
+                    "Tocca un'anteprima per guardarla e scorri di lato per passare alle altre. Lo scudo arancione segnala i contenuti potenzialmente importanti.",
+                    "In fondo all'elenco l'esito dell'ultima operazione, con «Vedi il resoconto»."
+                ]),
+                section("Eliminare subito un gruppo", [
+                    "Nella galleria di un gruppo di simili o di duplicati «Elimina N» elimina subito le foto scartate, senza passare da qui: ClearSpace mostra quante sono, lo spazio e gli effetti su iCloud, poi iOS chiede la sua conferma. Il menu «…» → «Aggiungi alla Revisione» invece le mette in questa lista, per eliminarle più tardi tutte insieme con una sola conferma."
                 ]),
                 section("Archivia prima", [
                     "Prima di eliminare puoi copiare i contenuti in un'altra posizione (un'unità esterna o un altro servizio cloud). Ogni copia viene confrontata con l'originale con l'impronta SHA-256: sono considerate riuscite solo quelle identiche. Puoi archiviare solo i contenuti potenzialmente importanti."
@@ -744,7 +742,7 @@ enum GuideBook {
                 ]),
                 section("Le tre operazioni", points: [
                     "Liberare spazio sul dispositivo: per i file di iCloud Drive scaricati, rimuove solo la copia locale. Il file resta in iCloud Drive; quelli non ancora caricati online non vengono toccati.",
-                    "Eliminare: come per le foto, solo dalla Revisione e con conferma.",
+                    "Eliminare: come per le foto, dalla Revisione oppure dalla galleria di un gruppo di duplicati, sempre con conferma.",
                     "Organizzare: sposta i file in sottocartelle per tipo o per anno, con anteprima prima di confermare. Nessun file viene eliminato."
                 ]),
                 section("Duplicati e versioni", [
@@ -929,6 +927,9 @@ enum GuideBook {
                 section("Ho sbagliato una scelta", [
                     "Nello swipe tocca Annulla. Altrimenti ripristina l'elemento dalla Revisione: finché non confermi, nulla è perso."
                 ]),
+                section("Ho eliminato una foto per sbaglio", [
+                    "Apri l'app Foto → «Eliminati di recente» (in fondo, nella sezione Utility), scegli la foto e tocca «Recupera». Resta lì 30 giorni, finché non svuoti l'album."
+                ]),
                 section("Un video non parte", [
                     "Probabilmente è solo su iCloud: tocca «Riproduci comunque»."
                 ]),
@@ -960,11 +961,12 @@ enum GuideBook {
                     "Tocco: porta sulla carta · Tieni premuto: menu · Griglia · Confronta · Tieni la migliore · Tieni solo questa."
                 ]),
                 section("Galleria e griglie", points: [
-                    "Tocco: seleziona · Trascina in orizzontale: selezione multipla (anche su più righe) · Parti da una selezionata: deseleziona · Tieni premuto: anteprima e menu.",
-                    "Un gruppo dopo l'altro: Tieni solo la migliore = passa al gruppo successivo · Salta = lascialo da decidere · Avanti = prossimo gruppo già deciso."
+                    "Galleria di un gruppo: tocco = tieni o elimina · Trascina in orizzontale: cambia più foto · Frecce sull'anteprima: a tutto schermo · Tieni premuto: anteprima e menu · Elimina N: elimina subito.",
+                    "Griglie: tocco = seleziona (in selezione) o apri · Trascina in orizzontale: selezione multipla · Un gesto verticale scorre sempre.",
+                    "Un gruppo dopo l'altro: Elimina o Tieni tutte = gruppo successivo · Salta = lascialo da decidere · Avanti = prossimo gruppo già deciso."
                 ]),
                 section("Confronto", points: [
-                    "Doppio tocco: zoom ×3 · Due dita: zoom libero · Trascina: sposta l'ingrandimento · Scorri in orizzontale: foto vicina · Riduci."
+                    "Doppio tocco: zoom ×3 · Due dita: zoom libero · Trascina: sposta l'ingrandimento · Trascina di lato: la foto segue il dito e passa alla vicina · Riduci."
                 ]),
                 section("Altrove", points: [
                     "Revisione: freccia blu = ripristina · tocco su un'anteprima = guardala.",

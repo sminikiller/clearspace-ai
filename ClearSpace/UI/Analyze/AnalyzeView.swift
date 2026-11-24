@@ -165,7 +165,7 @@ struct AnalyzeView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("E · Esecuzione")
                     .font(.subheadline.weight(.semibold))
-                Text("Avviene solo dalla scheda Revisione, dopo la tua conferma, ed è seguita dalla verifica dei risultati.")
+                Text("Avviene solo dopo la tua conferma, dalla Revisione o dalla galleria di un gruppo, ed è seguita dalla verifica dei risultati.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

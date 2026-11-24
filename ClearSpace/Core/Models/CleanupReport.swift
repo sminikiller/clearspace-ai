@@ -42,7 +42,8 @@ struct PlanExclusion: Identifiable, Codable, Hashable, Sendable {
     var id: UUID { itemID }
 }
 
-/// Conferma consapevole dell'utente. Può essere creata solo dalla schermata di conferma.
+/// Conferma consapevole dell'utente. Nasce dalla schermata di conferma della Revisione oppure dalla
+/// conferma di «Elimina» nella galleria di un gruppo, che mostra le stesse informazioni.
 struct DeletionConfirmation: Sendable {
     let planID: UUID
     let confirmedAt: Date

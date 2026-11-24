@@ -258,10 +258,12 @@ struct RecentlyDeletedSection: View {
     @State private var openFailed = false
 
     /// Apre l'app Foto. Non è un indirizzo documentato da Apple: se non funziona lo si dice.
-    private static let photosURL = URL(string: "photos-redirect://")
+    static let photosURL = URL(string: "photos-redirect://")
+
+    static let howTo = "In Foto apri «Eliminati di recente» (nella sezione Utility, in fondo), tocca Seleziona e poi Elimina tutto. iOS chiede il codice o Face ID: è normale."
 
     /// "3 elementi sono in Eliminati di recente e occupano ancora 24 MB sull'iPhone…".
-    private var explanation: String {
+    static func explanation(count: Int, deviceBytes: Int64) -> String {
         let subject = Format.plural(count, "elemento è", "elementi sono")
         if deviceBytes > 0 {
             let verb = count == 1 ? "occupa" : "occupano"
@@ -269,6 +271,10 @@ struct RecentlyDeletedSection: View {
         }
         let stays = count == 1 ? "resta recuperabile" : "restano recuperabili"
         return "\(subject) in Eliminati di recente, dove \(stays) per 30 giorni. Svuotando quell'album lo spazio si libera subito."
+    }
+
+    private var explanation: String {
+        Self.explanation(count: count, deviceBytes: deviceBytes)
     }
 
     var body: some View {
@@ -279,7 +285,7 @@ struct RecentlyDeletedSection: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Come fare")
                     .font(.subheadline.weight(.semibold))
-                Text("In Foto apri «Eliminati di recente» (nella sezione Utility, in fondo), tocca Seleziona e poi Elimina tutto. iOS chiede il codice o Face ID: è normale.")
+                Text(Self.howTo)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -372,5 +378,45 @@ struct ReportSummarySections: View {
             Text(Format.count(count))
                 .font(.body.weight(.semibold))
         }
+    }
+}
+
+/// Come liberare davvero lo spazio dopo un'eliminazione, in una scheda da usare fuori da un elenco.
+struct RecentlyDeletedCard: View {
+    let count: Int
+    let deviceBytes: Int64
+
+    @Environment(\.openURL) private var openURL
+    @State private var openFailed = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Libera davvero lo spazio")
+                .font(.headline)
+            Text(RecentlyDeletedSection.explanation(count: count, deviceBytes: deviceBytes))
+                .font(.subheadline)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(RecentlyDeletedSection.howTo)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Button {
+                guard let url = RecentlyDeletedSection.photosURL else { return }
+                openURL(url) { accepted in
+                    openFailed = !accepted
+                }
+            } label: {
+                Label("Apri l'app Foto", systemImage: "photo.on.rectangle")
+            }
+            .buttonStyle(.bordered)
+            .accessibilityIdentifier("recentlyDeleted.openPhotos")
+            if openFailed {
+                Text("Non è stato possibile aprire Foto da qui: aprila dalla schermata Home.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card()
     }
 }
