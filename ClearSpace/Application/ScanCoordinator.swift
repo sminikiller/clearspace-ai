@@ -394,6 +394,7 @@ final class ScanCoordinator {
         let result = await photoPipeline.buildSimilarityGroups(
             items: images,
             onlyUnchecked: true,
+            thresholds: preferences.values.similaritySensitivity.thresholds,
             control: makeControl(.previews)
         )
         store.replaceGroups(

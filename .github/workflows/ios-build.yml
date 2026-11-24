@@ -20,7 +20,9 @@ concurrency:
 jobs:
   build-and-test:
     runs-on: macos-15
-    timeout-minutes: 45
+    # Compilazione, test unitari, prova d'uso e giro con il testo grande richiedono ormai 35-40 minuti:
+    # con 45 il lavoro rischiava di essere interrotto a un passo dalla fine.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 

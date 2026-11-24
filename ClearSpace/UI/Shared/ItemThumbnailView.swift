@@ -29,6 +29,9 @@ struct ItemThumbnailView: View {
                 }
             }
             .clipped()
+            // Un'immagine che riempie il riquadro lo supera ai lati: il ritaglio ne nasconde la parte in
+            // eccesso, la forma esplicita le toglie anche i tocchi, che spettano ai riquadri vicini.
+            .contentShape(Rectangle())
             .task(id: item.id) {
                 await load()
             }

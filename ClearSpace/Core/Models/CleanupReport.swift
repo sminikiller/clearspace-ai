@@ -205,6 +205,17 @@ struct CleanupReport: Identifiable, Codable, Sendable {
     var pendingCount: Int { count(.pending) }
     var skippedCount: Int { count(.skipped) }
 
+    /// Foto e video spostati in Eliminati di recente: occupano ancora spazio finché quell'album
+    /// dell'app Foto non viene svuotato (o finché non passano 30 giorni).
+    var recentlyDeletedCount: Int {
+        outcomes.reduce(0) { $0 + ($1.state == .deleted && $1.source == .photoLibrary ? 1 : 0) }
+    }
+
+    /// Spazio sull'iPhone che si libera davvero solo svuotando Eliminati di recente.
+    var recentlyDeletedDeviceBytes: Int64 {
+        outcomes.reduce(0) { $0 + ($1.state == .deleted && $1.source == .photoLibrary ? $1.deviceBytes : 0) }
+    }
+
     /// Spazio liberato sull'iPhone dagli elementi effettivamente eliminati.
     var deviceBytesFreed: Int64 {
         outcomes.reduce(0) { $0 + ($1.state == .deleted ? $1.deviceBytes : 0) }

@@ -226,6 +226,10 @@ struct SimilarStripView: View {
         return ItemThumbnailView(item: member, pointSide: 60)
             .frame(width: 52, height: 52)
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            // Le anteprime orizzontali (video, panoramiche) riempiono il riquadro e lo superano ai lati:
+            // il ritaglio le nasconde, ma senza una forma esplicita la parte nascosta riceverebbe ancora
+            // i tocchi, e un tocco sul bordo di un'anteprima finirebbe su quella accanto.
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay {
                 // Un video non ancora sulla carta mostra che si può avviare.
                 if member.isVideo && !isCurrent {

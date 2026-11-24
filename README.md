@@ -19,6 +19,7 @@ Verificato a ogni modifica del codice (ultimo esito: tutto superato):
 - prova d'uso automatica sul simulatore, con una schermata salvata a ogni passo:
   - introduzione, permesso per Foto, analisi completa fino al termine, swipe e pulsanti, annullamento, dettagli, revisione, conferma, eliminazione reale di due foto di prova ed esito;
   - foto simili: il workflow aggiunge al simulatore tre scatti della stessa scena (nitido, sfocato, scuro) e l'app deve riconoscerli come gruppo e consigliare quello nitido; nello swipe deve comparire la striscia con tutti gli scatti, «Tieni la migliore» deve chiudere il gruppo e un solo annullamento deve ripristinarlo;
+  - un gruppo dopo l'altro: dall'elenco dei gruppi si apre il primo gruppo da decidere con «Gruppo 1 di N» nel titolo; «Salta» porta al riepilogo finale e «Torna all'elenco» riporta indietro senza cambiare nulla;
   - griglia del gruppo: trascinando il dito sulla prima riga si selezionano le tre foto, i tocchi deselezionano, la stella resta sulla foto scelta e si ritrova in Esplora, «Tieni solo la tua migliore» chiude il gruppo; nel confronto i pulsanti stanno sopra il bordo inferiore e il contatore sotto la barra del titolo; nella griglia di una categoria «Seleziona» e un trascinamento selezionano tre elementi;
   - video: un video di prova deve riprodursi dentro la carta e mettersi in pausa con un tocco; con due riprese quasi uguali, toccando l'altra nella striscia deve passare sulla carta e partire, e «Tieni solo questo» deve chiudere il gruppo;
   - un giro di tutte le altre schermate;
@@ -68,7 +69,7 @@ Il repository contiene due workflow, che girano su runner macOS di GitHub.
 
 Nel riepilogo di ogni esecuzione compaiono solo errori e risultati; i log completi di `xcodebuild` e le schermate della prova d'uso sono allegati come artefatto `risultati`. Le modifiche ai soli file `.md` non avviano la compilazione. Nei repository privati i minuti macOS di GitHub sono limitati e contano dieci volte: se si esauriscono, rendere pubblico il repository li rende gratuiti.
 
-La prova d'uso (`ClearSpaceUITests/SmokeTests.swift`) usa l'app sul simulatore come farebbe una persona: completa l'introduzione, concede l'accesso a Foto, attende la fine dell'analisi, rivede le foto con gli swipe e con i pulsanti, annulla una scelta, apre i dettagli, passa dalla Revisione alla conferma, elimina davvero due foto di prova (compreso l'avviso di sistema di iOS) e controlla l'esito. Un secondo giro apre le altre schermate. Ogni passo salva una schermata.
+La prova d'uso (`ClearSpaceUITests/SmokeTests.swift`) usa l'app sul simulatore come farebbe una persona: completa l'introduzione, concede l'accesso a Foto, attende la fine dell'analisi, rivede le foto con gli swipe e con i pulsanti, annulla una scelta, apre i dettagli, passa dalla Revisione alla conferma, elimina davvero due foto di prova (compreso l'avviso di sistema di iOS) e controlla l'esito, compreso l'aiuto per svuotare Eliminati di recente. Un secondo giro apre le altre schermate. Ogni passo salva una schermata.
 
 ### TestFlight
 
@@ -126,7 +127,7 @@ ClearSpaceTests/             test unitari sulla logica
 ClearSpaceUITests/           prova d'uso automatica sul simulatore
 ```
 
-80 file Swift per l'app (circa 16.700 righe), 6 file di test unitari e 1 di prova d'uso.
+95 file Swift per l'app (circa 24.300 righe), 9 file di test unitari e 3 per la prova d'uso e il giro con il testo grande.
 
 ## Architettura
 
@@ -146,6 +147,9 @@ ClearSpaceUITests/           prova d'uso automatica sul simulatore
 2. **Revisione.** La scheda Revisione mostra tutto ciò che è stato selezionato; si può ripristinare un elemento, un gruppo o tutto.
 3. **Conferma.** `PlanBuilder` prepara l'elenco con gli effetti distinti su iPhone e iCloud. L'utente deve confermare, e dichiarare di aver compreso gli effetti su iCloud e di aver controllato i contenuti sensibili quando presenti.
 4. **Esecuzione.** Solo `SafetyEngine.execute` può eliminare, e solo con una conferma valida per quel piano. Ricontrolla ogni elemento, esegue, verifica l'esito e registra ciò che è realmente avvenuto: eliminato, non riuscito o in attesa.
+5. **Eliminati di recente.** Foto e video vanno in Eliminati di recente e occupano spazio per altri 30 giorni. iOS non permette alle app di svuotare quell'album: l'esito e, per 30 giorni, la scheda Risultati spiegano come farlo e aprono l'app Foto.
+
+Finché qualcosa aspetta la conferma, la Home mostra la scheda «Pronto da liberare» con il numero di elementi, lo spazio e il collegamento alla Revisione.
 
 Gli elementi protetti (preferiti, foto nascoste, album, cartelle e periodi scelti, elementi protetti singolarmente) non possono entrare nella lista delle eliminazioni.
 
@@ -161,6 +165,8 @@ Quando una foto ha degli scatti simili, l'app li mostra tutti: nella modalità s
 - **Confronto corretto.** Un criterio viene usato solo se è disponibile per tutti gli scatti del gruppo: non si paragonano numeri calcolati in modo diverso. Preferiti e foto modificate prevalgono sempre, perché sono scelte già fatte dall'utente.
 - **Spiegazione.** Il consiglio arriva con il motivo («ha gli occhi aperti e il soggetto più a fuoco») e ogni scatto ha un voto da 0 a 100. Nel confronto lo zoom è condiviso: ingrandito un punto, si passa da una foto all'altra restando lì.
 - **Scelta.** «Tieni solo la migliore», «Tieni solo questa» oppure «Tieni tutte». Gli scatti scartati passano alla Revisione come ogni altra scelta, e la mossa si annulla con un solo gesto.
+- **Un gruppo dopo l'altro.** Dalla Home («Scegli le foto migliori») o in cima all'elenco dei gruppi si aprono i gruppi da decidere uno dopo l'altro, a partire da quello che libera più spazio: «Gruppo 3 di 12» nel titolo, la galleria del gruppo e, dopo «Tieni solo la migliore» o «Tieni tutte», il gruppo successivo. «Salta» lo lascia da decidere; alla fine un riepilogo porta alla Revisione. Nell'elenco i gruppi già decisi vanno in fondo con l'etichetta «Deciso». La logica (cosa è deciso, ordine, gruppi spariti) è in `Core/Logic/GroupReview.swift`.
+- **Sensibilità.** In Impostazioni → Foto simili si sceglie quanto devono somigliarsi due scatti: Rigorosa, Normale o Ampia cambiano insieme distanza tra impronte visive, finestra di tempo e distanza delle impronte percettive. Cambiandola, l'app azzera il controllo di somiglianza delle foto e ricalcola i gruppi con un'analisi rapida; decisioni e stelle restano.
 - **Uno per uno.** Vale per le foto e per i video simili: un tocco su un'anteprima della striscia porta quell'elemento sulla carta, dove lo si guarda (un video parte subito) e lo si decide con i soliti gesti. Si può tornare anche su un elemento già deciso e cambiare idea. Tenendo premuta un'anteprima lo si conserva o scarta senza spostarsi.
 
 ### Anteprime nitide e video
@@ -198,6 +204,8 @@ Le schermate che scorrono seguono la dimensione del testo scelta in iOS. Quelle 
 | E, esecuzione | Solo dalla Revisione, dopo la conferma. |
 
 La scansione si può mettere in pausa, si sospende da sola con batteria scarica o dispositivo caldo e non scarica originali da iCloud senza consenso.
+
+Le analisi pesanti (anteprime, impronte visive dei gruppi, misure degli scatti simili) esaminano più elementi insieme, su un massimo di quattro processori, e chiedono a PhotoKit gli asset a blocchi invece che uno per uno. Durante l'analisi l'indice completo si salva al massimo ogni 10 secondi e il riepilogo si ricalcola al massimo una volta al secondo; le decisioni dell'utente hanno un file a parte, salvato subito.
 
 ---
 
@@ -247,7 +255,7 @@ La scansione si può mettere in pausa, si sospende da sola con batteria scarica 
 
 ## Test
 
-`ClearSpaceTests` contiene oltre 110 test sulla logica pura: regole di sicurezza e conferma, piano di eliminazione, sessioni e annullamento, ricerca in linguaggio naturale, confronto dei testi, misure sulle immagini, punteggio di recuperabilità, pianificazione delle code, riepilogo e rilevamento dei viaggi.
+`ClearSpaceTests` contiene oltre 130 test sulla logica pura: regole di sicurezza e conferma, piano di eliminazione, sessioni e annullamento, ricerca in linguaggio naturale, confronto dei testi, misure sulle immagini, punteggio di recuperabilità, pianificazione delle code, riepilogo e rilevamento dei viaggi, revisione gruppo per gruppo, sensibilità delle foto simili, promemoria di Eliminati di recente e calcolo in parallelo.
 
 Si eseguono da Xcode con Prodotto → Test, oppure con il workflow di GitHub.
 

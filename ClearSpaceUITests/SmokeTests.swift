@@ -47,6 +47,8 @@ final class SmokeTests: UITestCase {
             return
         }
         capture("40-foto-simili")
+        checkGroupSequence()
+        bringIntoView(groupRow)
         groupRow.tap()
 
         // Galleria del gruppo: tutte le anteprime insieme, con la stella messa durante lo swipe
@@ -179,11 +181,18 @@ final class SmokeTests: UITestCase {
         }
         capture("48-video-simili")
 
-        // Un tocco sull'altro video: passa sulla carta e parte
-        other.tap()
+        // Un tocco sull'altro video: passa sulla carta e parte. Si tocca il centro dell'anteprima, come
+        // farebbe una persona: vale sia per l'anteprima a sinistra di quella sulla carta sia per quella
+        // a destra (quale delle due sia consigliata cambia da un'esecuzione all'altra).
+        other.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let moved = element(startingWith: otherPrefix + ", sulla carta").waitForExistence(timeout: 6)
+        if !moved {
+            capture("48b-dopo-il-tocco-sulla-striscia")
+        }
+        let onCard = element(containing: ", sulla carta")
         XCTAssertTrue(
-            element(startingWith: otherPrefix + ", sulla carta").waitForExistence(timeout: 6),
-            "Il video toccato nella striscia non è passato sulla carta"
+            moved,
+            "Il video toccato nella striscia (\(otherPrefix)) non è passato sulla carta; sulla carta: \(onCard.exists ? onCard.label : "nessuno")"
         )
         pause(3)
         capture("49-altro-video-sulla-carta")
@@ -382,6 +391,62 @@ final class SmokeTests: UITestCase {
         }
     }
 
+    /// In cima all'elenco dei gruppi «Decidi un gruppo dopo l'altro» apre il primo gruppo da decidere,
+    /// con «Gruppo 1 di N» nel titolo e «Salta» in alto. Saltando l'ultimo gruppo compare il riepilogo.
+    /// Non viene presa nessuna decisione: il gruppo resta com'era per i passi successivi.
+    private func checkGroupSequence() {
+        let start = app.descendants(matching: .any)["groups.sequence"]
+        guard start.waitForExistence(timeout: 5) else {
+            XCTFail("Nell'elenco dei gruppi manca «Decidi un gruppo dopo l'altro»")
+            return
+        }
+        start.tap()
+        let title = app.navigationBars
+            .matching(NSPredicate(format: "identifier BEGINSWITH %@", "Gruppo 1 di"))
+            .firstMatch
+        guard title.waitForExistence(timeout: 10) else {
+            capture("39a-sequenza-non-aperta")
+            XCTFail("La revisione gruppo per gruppo non si è aperta sul primo gruppo")
+            goBack()
+            return
+        }
+        XCTAssertTrue(
+            app.staticTexts["grid.selectionCount"].waitForExistence(timeout: 10),
+            "Nella revisione gruppo per gruppo manca la galleria del gruppo"
+        )
+        pause(1.5)
+        capture("39a-gruppo-dopo-gruppo")
+
+        let next = sequenceNextButton
+        guard next.waitForExistence(timeout: 5) else {
+            XCTFail("Nella revisione gruppo per gruppo manca «Salta»")
+            goBack()
+            return
+        }
+        XCTAssertTrue(next.label.hasPrefix("Salta"), "Un gruppo con foto da decidere deve offrire «Salta» (\(next.label))")
+        let isLast = title.identifier == "Gruppo 1 di 1"
+        next.tap()
+        guard isLast else {
+            pause(1)
+            goBack()
+            return
+        }
+        XCTAssertTrue(
+            element(containing: "Hai visto tutti i gruppi").waitForExistence(timeout: 6),
+            "Dopo l'ultimo gruppo non compare il riepilogo"
+        )
+        pause(0.5)
+        capture("39b-gruppi-finiti")
+        let back = app.buttons["Torna all'elenco"]
+        if back.waitForExistence(timeout: 5) {
+            back.tap()
+        } else {
+            XCTFail("Nel riepilogo manca «Torna all'elenco»")
+            goBack()
+        }
+        pause(1)
+    }
+
     /// Nel confronto i pulsanti devono stare sopra il bordo inferiore e il contatore sotto la barra
     /// del titolo: prima finivano dietro la barra delle schede e dietro il pulsante per tornare indietro.
     private func checkComparisonLayout() {
@@ -568,6 +633,11 @@ final class SmokeTests: UITestCase {
         pause(1)
         capture("14-esito")
         XCTAssertTrue(element(containing: "Eliminati correttamente").exists, "Il resoconto non riporta gli stati")
+        // Le foto sono in Eliminati di recente: l'esito spiega come liberare davvero lo spazio.
+        let openPhotos = app.buttons["recentlyDeleted.openPhotos"]
+        bringIntoView(openPhotos)
+        XCTAssertTrue(openPhotos.exists, "Nell'esito manca l'aiuto per svuotare Eliminati di recente")
+        capture("14b-esito-eliminati-di-recente")
         let done = app.buttons["Fine"]
         bringIntoView(done)
         done.tap()
@@ -583,6 +653,10 @@ final class SmokeTests: UITestCase {
         app.tabBars.buttons["Risultati"].tap()
         pause(1)
         capture("16-risultati")
+        let reminder = app.buttons["recentlyDeleted.openPhotos"]
+        bringIntoView(reminder)
+        XCTAssertTrue(reminder.exists, "In Risultati manca il promemoria per svuotare Eliminati di recente")
+        capture("16b-risultati-eliminati-di-recente")
     }
 
     // MARK: - Giro delle schermate

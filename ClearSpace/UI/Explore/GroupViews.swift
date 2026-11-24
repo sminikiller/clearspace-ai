@@ -1,13 +1,41 @@
 import SwiftUI
 
-/// Gruppo pronto per essere mostrato, con i suoi membri e lo spazio potenziale.
-private struct GroupEntry: Identifiable {
+/// Gruppo pronto per essere mostrato, con i suoi membri e quanto resta da decidere.
+struct GroupEntry: Identifiable {
     let group: ItemGroup
     let members: [IndexedItem]
-    /// Spazio degli elementi diversi da quello suggerito e ancora da decidere.
-    let potentialBytes: Int64
+    /// Elementi da decidere e spazio che si libererebbe tenendo solo le migliori.
+    let review: GroupReviewSummary
 
     var id: UUID { group.id }
+    var potentialBytes: Int64 { review.potentialBytes }
+    var isDecided: Bool { review.isDecided }
+}
+
+/// I gruppi di duplicati o di simili di una categoria, letti dall'indice.
+@MainActor
+enum GroupCatalog {
+
+    /// Gruppi della categoria: prima quelli da decidere, da quello che libera più spazio.
+    static func entries(for collection: SmartCollection, env: AppEnvironment) -> [GroupEntry] {
+        let context = CollectionContext(now: Date(), largeVideoBytes: env.preferences.values.largeVideoBytes)
+        let protection = env.safety.evaluator()
+        var result: [GroupEntry] = []
+        for group in env.store.groupsSnapshot() where group.kind.isDuplicateKind == collection.usesDuplicateGroups {
+            let members = env.store.members(of: group)
+            guard members.count >= 2, members.contains(where: { collection.contains($0, context: context) }) else {
+                continue
+            }
+            let review = GroupReview.summary(members: members, suggestedID: group.suggestedKeepID, evaluator: protection)
+            result.append(GroupEntry(group: group, members: members, review: review))
+        }
+        return GroupReview.ordered(result) { $0.review }
+    }
+
+    /// Gruppi da proporre uno dopo l'altro: quelli da decidere o, se sono tutti decisi, tutti.
+    static func sequence(for collection: SmartCollection, env: AppEnvironment) -> [UUID] {
+        GroupReview.sequence(entries(for: collection, env: env)) { $0.review }.map { $0.group.id }
+    }
 }
 
 /// Elenco dei gruppi di duplicati o di contenuti simili di una categoria.
@@ -24,6 +52,15 @@ struct GroupListView: View {
         List {
             Section {
                 explanation
+                if !entries.isEmpty {
+                    // Il modo più rapido: si aprono i gruppi da decidere uno dopo l'altro.
+                    NavigationLink {
+                        GroupSequenceView(collection: collection)
+                    } label: {
+                        sequenceLabel
+                    }
+                    .accessibilityIdentifier("groups.sequence")
+                }
             }
             if entries.isEmpty && !isLoading {
                 ContentUnavailableView(
@@ -80,22 +117,32 @@ struct GroupListView: View {
         }
     }
 
-    private func reload() {
-        let context = CollectionContext(now: Date(), largeVideoBytes: env.preferences.values.largeVideoBytes)
-        let protection = env.safety.evaluator()
-        var result: [GroupEntry] = []
-        for group in env.store.groupsSnapshot() where group.kind.isDuplicateKind == collection.usesDuplicateGroups {
-            let members = env.store.members(of: group)
-            guard members.count >= 2, members.contains(where: { collection.contains($0, context: context) }) else {
-                continue
+    /// "Decidi un gruppo dopo l'altro · 12 da decidere · fino a 340 MB da liberare".
+    private var sequenceLabel: some View {
+        let pending = entries.filter { !$0.isDecided }
+        let freeable = pending.reduce(Int64(0)) { $0 + $1.potentialBytes }
+        return HStack(spacing: 12) {
+            Image(systemName: "rectangle.stack.badge.play")
+                .font(.title2)
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 34)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(pending.isEmpty ? "Rivedi i gruppi uno dopo l'altro" : "Decidi un gruppo dopo l'altro")
+                    .font(.headline)
+                Text(pending.isEmpty
+                     ? "Sono tutti decisi: puoi ricontrollarli in sequenza."
+                     : "\(Format.plural(pending.count, "gruppo da decidere", "gruppi da decidere")) · fino a \(Format.bytes(freeable)) da liberare")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
-            let keepID = group.suggestedKeepID
-            let potential = members.reduce(Int64(0)) { total, member in
-                member.id != keepID && protection.isReviewable(member) ? total + member.bytes : total
-            }
-            result.append(GroupEntry(group: group, members: members, potentialBytes: potential))
         }
-        entries = result.sorted { $0.potentialBytes > $1.potentialBytes }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func reload() {
+        entries = GroupCatalog.entries(for: collection, env: env)
         isLoading = false
     }
 
@@ -132,8 +179,12 @@ private struct GroupRow: View {
                         .frame(width: 44, height: 64)
                 }
             }
-            HStack(spacing: 6) {
+            // Su più righe se serve: con il testo grande nessuna etichetta esce dallo schermo.
+            FlowLayout(spacing: 6, lineSpacing: 4) {
                 TagChip(text: entry.group.kind.title, tint: entry.group.kind == .exactDuplicate ? Theme.keep : Theme.info)
+                if entry.isDecided {
+                    TagChip(text: "Deciso", systemImage: "checkmark", tint: Theme.keep)
+                }
                 Text("\(entry.members.count) elementi · \(Format.bytes(entry.potentialBytes)) potenziali")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -151,6 +202,8 @@ private struct GroupRow: View {
             }
         }
         .padding(.vertical, 4)
+        // I gruppi già decisi restano consultabili, ma passano in secondo piano.
+        .opacity(entry.isDecided ? 0.75 : 1)
         .accessibilityElement(children: .combine)
     }
 }

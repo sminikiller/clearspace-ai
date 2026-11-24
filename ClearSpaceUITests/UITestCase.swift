@@ -61,6 +61,15 @@ class UITestCase: XCTestCase {
         app.descendants(matching: .any)["grid.cell.\(index)"]
     }
 
+    /// «Salta» (o «Avanti») nella barra in alto della revisione gruppo per gruppo. Si cerca per
+    /// identificativo e, in alternativa, per etichetta: nelle barre di navigazione iOS non sempre
+    /// riporta l'identificativo dei pulsanti.
+    var sequenceNextButton: XCUIElement {
+        let labels = ["Salta il gruppo", "Salta", "Passa al gruppo successivo", "Avanti"]
+        let predicate = NSPredicate(format: "identifier == %@ OR label IN %@", "sequence.next", labels)
+        return app.navigationBars.buttons.matching(predicate).firstMatch
+    }
+
     /// Titolo della schermata in primo piano: serve a capire se un tocco ne ha aperta un'altra.
     var currentTitle: String {
         let bar = app.navigationBars.firstMatch

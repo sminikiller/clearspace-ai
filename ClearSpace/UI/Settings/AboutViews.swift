@@ -45,44 +45,34 @@ struct ReleaseNote: Identifiable {
 
     static let current: [ReleaseNote] = [
         ReleaseNote(
-            systemImage: "square.grid.3x3",
-            title: "Galleria dei simili",
-            text: "Tutte le foto simili in griglia: tocca per selezionarle oppure trascina il dito in orizzontale per sceglierne tante insieme, come nell'app Foto."
+            systemImage: "rectangle.stack.badge.play",
+            title: "Un gruppo dopo l'altro",
+            text: "Le foto simili si decidono come un mazzo di carte: tieni la migliore e compare da solo il gruppo successivo, a partire da quello che libera più spazio. Dalla Home: «Scegli le foto migliori»."
         ),
         ReleaseNote(
-            systemImage: "star.fill",
-            title: "Le tue migliori",
-            text: "Segna con una stella le foto da tenere: restano conservate e «Tieni solo le tue migliori» propone le altre per l'eliminazione."
+            systemImage: "checkmark.circle",
+            title: "Gruppi già decisi",
+            text: "Nell'elenco dei gruppi quelli da decidere vengono prima; quelli già sistemati vanno in fondo con l'etichetta «Deciso»."
         ),
         ReleaseNote(
-            systemImage: "rectangle.split.2x1",
-            title: "Confronto più chiaro",
-            text: "Foto grande, dettagli che scorrono e pulsanti sempre visibili sopra il bordo dello schermo."
+            systemImage: "trash.circle",
+            title: "Pronto da liberare",
+            text: "La Home ricorda quanto hai proposto per l'eliminazione e non hai ancora confermato, con un tocco per aprire la Revisione."
         ),
         ReleaseNote(
-            systemImage: "textformat.size",
-            title: "Testo grande e tema scuro",
-            text: "Tutte le schermate si adattano al testo ingrandito: niente scritte tagliate o fuori dallo schermo."
+            systemImage: "photo.on.rectangle",
+            title: "Libera davvero lo spazio",
+            text: "Dopo un'eliminazione l'app spiega come svuotare Eliminati di recente e apre l'app Foto: è lì che lo spazio delle foto si libera davvero."
         ),
         ReleaseNote(
-            systemImage: "play.rectangle.on.rectangle",
-            title: "Video simili",
-            text: "Tocca un video nella striscia sotto la carta per guardarlo subito e deciderlo."
+            systemImage: "slider.horizontal.3",
+            title: "Sensibilità delle foto simili",
+            text: "In Impostazioni → Foto simili scegli Rigorosa, Normale o Ampia: i gruppi si ricalcolano da soli e le tue scelte restano."
         ),
         ReleaseNote(
-            systemImage: "photo.badge.checkmark",
-            title: "Foto nitide anche in 4G",
-            text: "Nel confronto e a tutto schermo la foto che guardi viene scaricata nitida da iCloud anche con la rete cellulare. Si può spegnere nelle Impostazioni."
-        ),
-        ReleaseNote(
-            systemImage: "graduationcap",
-            title: "Guida completa e tutorial",
-            text: "Ogni strumento spiegato nei dettagli, con la ricerca nel testo, e un tutorial per strumento con esercizi veri che si spuntano da soli quando li fai. Dalla Home: «Guida e tutorial»."
-        ),
-        ReleaseNote(
-            systemImage: "info.circle",
-            title: "Informazioni e guida",
-            text: "Nelle Impostazioni trovi chi ha creato l'app, i crediti, una guida rapida e il modo per inviare un commento."
+            systemImage: "speedometer",
+            title: "Analisi più veloce",
+            text: "Le anteprime e gli scatti simili vengono esaminati più alla volta, usando insieme più processori del telefono; durante l'analisi l'indice si salva meno spesso, con meno consumo di batteria."
         )
     ]
 }
@@ -330,6 +320,7 @@ struct QuickGuideView: View {
             Section("Foto e video simili") {
                 guideRow("square.stack.3d.down.right", "Striscia sotto la carta", "Mostra tutto il gruppo: tocca un'anteprima per portarla sulla carta (un video parte subito).")
                 guideRow("square.grid.3x3", "Griglia", "Tutte le foto insieme: tocca o trascina il dito in orizzontale per selezionarne tante, tieni premuto per vederne una in grande.")
+                guideRow("rectangle.stack.badge.play", "Un gruppo dopo l'altro", "Dalla Home «Scegli le foto migliori», oppure in cima all'elenco dei gruppi: tieni la migliore e compare da solo il gruppo successivo. «Salta» lo lascia da decidere.")
                 guideRow("star.fill", "Stella", "Segna le tue migliori: restano conservate e «Tieni solo le tue migliori» propone le altre.")
                 guideRow("sparkles", "Consiglio", "Le scintille indicano lo scatto che l'app ritiene migliore, con il motivo: nitidezza, volti, occhi aperti, esposizione.")
                 guideRow("rectangle.split.2x1", "Confronta", "Guarda le foto in grande una dopo l'altra, con lo zoom che resta sullo stesso punto.")
@@ -337,7 +328,7 @@ struct QuickGuideView: View {
 
             Section("Revisione e sicurezza") {
                 guideRow("checklist", "Revisione", "Tutto ciò che proponi per l'eliminazione resta qui finché non confermi.")
-                guideRow("trash", "Eliminati di recente", "Le foto eliminate restano recuperabili per 30 giorni nell'app Foto.")
+                guideRow("trash", "Eliminati di recente", "Le foto eliminate restano recuperabili per 30 giorni nell'app Foto: lo spazio si libera quando svuoti quell'album. Dopo un'eliminazione «Apri l'app Foto» ti ci porta.")
                 guideRow("lock", "Protezioni", "Preferiti, foto nascoste, album e periodi scelti da te non vengono mai proposti.")
             }
 

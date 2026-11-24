@@ -39,6 +39,72 @@ enum ReminderFrequency: String, Codable, CaseIterable, Sendable {
     }
 }
 
+/// Soglie con cui due scatti vengono considerati simili.
+struct SimilarityThresholds: Equatable, Sendable {
+    /// Distanza massima tra le impronte visive di Vision (0 = immagini identiche).
+    var featureDistance: Float
+    /// Distanza massima tra due screenshot: le schermate si somigliano molto anche quando sono diverse.
+    var screenshotDistance: Float
+    /// Due scatti vengono confrontati solo se fatti entro questo intervallo l'uno dall'altro.
+    var timeWindow: TimeInterval
+    /// Bit di differenza tra impronte percettive, usati quando l'impronta di Vision manca.
+    var hashDistance: Int
+
+    static let standard = SimilarityThresholds(
+        featureDistance: AppConfiguration.Thresholds.similarFeatureDistance,
+        screenshotDistance: AppConfiguration.Thresholds.similarScreenshotDistance,
+        timeWindow: AppConfiguration.Thresholds.similarTimeWindow,
+        hashDistance: AppConfiguration.Thresholds.similarHashDistance
+    )
+}
+
+/// Quanto devono somigliarsi due scatti per finire nello stesso gruppo di foto simili.
+enum SimilaritySensitivity: String, Codable, CaseIterable, Sendable {
+    /// Solo scatti quasi identici, fatti a breve distanza: gruppi più piccoli e più sicuri.
+    case strict
+    case standard
+    /// Anche scatti con inquadrature un po' diverse e più distanti nel tempo: gruppi più grandi.
+    case broad
+
+    var title: String {
+        switch self {
+        case .strict: return "Rigorosa"
+        case .standard: return "Normale"
+        case .broad: return "Ampia"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .strict: return "Rigorosa: solo scatti quasi identici, fatti a pochi secondi di distanza. Gruppi più piccoli."
+        case .standard: return "Normale: scatti dello stesso soggetto fatti entro pochi minuti. È l'impostazione consigliata."
+        case .broad: return "Ampia: anche scatti con inquadrature un po' diverse o fatti a qualche minuto di distanza. Gruppi più grandi, da controllare con più attenzione."
+        }
+    }
+
+    var thresholds: SimilarityThresholds {
+        let standard = SimilarityThresholds.standard
+        switch self {
+        case .strict:
+            return SimilarityThresholds(
+                featureDistance: standard.featureDistance * 0.76,
+                screenshotDistance: standard.screenshotDistance * 0.72,
+                timeWindow: standard.timeWindow / 2,
+                hashDistance: max(1, standard.hashDistance - 3)
+            )
+        case .standard:
+            return standard
+        case .broad:
+            return SimilarityThresholds(
+                featureDistance: standard.featureDistance * 1.24,
+                screenshotDistance: standard.screenshotDistance * 1.28,
+                timeWindow: standard.timeWindow * 2,
+                hashDistance: standard.hashDistance + 3
+            )
+        }
+    }
+}
+
 enum PlanTier: Int, Codable, CaseIterable, Comparable, Sendable {
     case free = 0
     case pro = 1
@@ -118,6 +184,8 @@ struct UserPreferences: Codable, Equatable, Sendable {
     /// La foto che si sta esaminando (confronto, tutto schermo) si scarica nitida anche con la rete
     /// cellulare. Le altre anteprime rispettano `wifiOnlyDownloads`.
     var sharpPreviewsOnCellular = true
+    /// Quanto devono somigliarsi due scatti per formare un gruppo di foto simili.
+    var similaritySensitivity: SimilaritySensitivity = .standard
     var reminderFrequency: ReminderFrequency = .off
     var protection = ProtectionRules()
     var transcriptionLocaleIdentifier = "it-IT"
@@ -143,6 +211,9 @@ struct UserPreferences: Codable, Equatable, Sendable {
         largeVideoThresholdMB = try container.decodeIfPresent(Int.self, forKey: .largeVideoThresholdMB) ?? 100
         autoplayVideos = try container.decodeIfPresent(Bool.self, forKey: .autoplayVideos) ?? true
         sharpPreviewsOnCellular = try container.decodeIfPresent(Bool.self, forKey: .sharpPreviewsOnCellular) ?? true
+        // Un valore sconosciuto (ad esempio salvato da una versione più recente) non deve far perdere
+        // tutte le altre preferenze.
+        similaritySensitivity = (try? container.decodeIfPresent(SimilaritySensitivity.self, forKey: .similaritySensitivity)) ?? .standard
         reminderFrequency = try container.decodeIfPresent(ReminderFrequency.self, forKey: .reminderFrequency) ?? .off
         protection = try container.decodeIfPresent(ProtectionRules.self, forKey: .protection) ?? ProtectionRules()
         transcriptionLocaleIdentifier = try container.decodeIfPresent(String.self, forKey: .transcriptionLocaleIdentifier) ?? "it-IT"

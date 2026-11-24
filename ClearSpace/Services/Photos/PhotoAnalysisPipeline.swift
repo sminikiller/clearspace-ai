@@ -18,37 +18,81 @@ actor PhotoAnalysisPipeline {
         var isComplete: Bool
     }
 
+    // MARK: - Lavoro in parallelo
+
+    /// Quanti elementi si analizzano insieme: abbastanza per usare più core, non tanti da scaldare
+    /// il telefono o occupare troppa memoria con le anteprime aperte contemporaneamente.
+    static var parallelWorkers: Int {
+        min(4, max(2, ProcessInfo.processInfo.activeProcessorCount - 1))
+    }
+
+    /// Calcola `work` per ogni posizione usando più core. Serve per i lavori pesanti e sincroni
+    /// (anteprime di PhotoKit, Vision) in cui ogni elemento è indipendente dagli altri.
+    /// I risultati rispettano l'ordine delle posizioni.
+    static func concurrentResults<Value>(count: Int, _ work: (Int) -> Value?) -> [Value?] {
+        guard count > 1 else {
+            return count == 1 ? [autoreleasepool { work(0) }] : []
+        }
+        let slots = ConcurrentSlots<Value>(count: count)
+        let workers = min(count, parallelWorkers)
+        DispatchQueue.concurrentPerform(iterations: workers) { worker in
+            var index = worker
+            while index < count {
+                let value = autoreleasepool { work(index) }
+                slots.store(value, at: index)
+                index += workers
+            }
+        }
+        return slots.values
+    }
+
+    /// Asset della libreria degli elementi indicati, letti con un'unica richiesta a PhotoKit invece
+    /// che uno per uno.
+    static func assetsByIdentifier(_ items: [IndexedItem]) -> [String: PHAsset] {
+        var result: [String: PHAsset] = [:]
+        let identifiers = items.filter { $0.source == .photoLibrary }.map { $0.sourceIdentifier }
+        for asset in PhotoLibraryService.assets(identifiers) {
+            result[asset.localIdentifier] = asset
+        }
+        return result
+    }
+
     // MARK: - Fase B: anteprime
 
-    /// Analizza le anteprime. Restituisce `false` se l'analisi è stata interrotta.
+    /// Elementi esaminati tra un salvataggio e il successivo: tra un blocco e l'altro l'analisi
+    /// può essere messa in pausa o interrotta.
+    private static let previewChunkSize = 32
+
+    /// Analizza le anteprime, più elementi alla volta. Restituisce `false` se l'analisi è stata interrotta.
     func analyzePreviews(
         items: [IndexedItem],
         control: ScanControl,
         apply: @Sendable ([AnalysisUpdate]) async -> Void
     ) async -> Bool {
-        var pending: [AnalysisUpdate] = []
-        var processed = 0
-        for item in items {
-            let update = autoreleasepool { Self.previewUpdate(for: item) }
-            pending.append(update)
-            processed += 1
-            if pending.count >= 30 {
-                await apply(pending)
-                pending.removeAll(keepingCapacity: true)
-                await control.progress(processed, items.count)
-                if !(await control.shouldContinue()) { return false }
+        var start = 0
+        while start < items.count {
+            let chunk = Array(items[start..<min(start + Self.previewChunkSize, items.count)])
+            let assets = Self.assetsByIdentifier(chunk)
+            let updates = Self.concurrentResults(count: chunk.count) { (index: Int) -> AnalysisUpdate? in
+                let item = chunk[index]
+                return Self.previewUpdate(for: item, asset: assets[item.sourceIdentifier])
             }
-        }
-        if !pending.isEmpty {
-            await apply(pending)
+            await apply(updates.compactMap { $0 })
+            start += chunk.count
+            await control.progress(start, items.count)
+            if !(await control.shouldContinue()) { return false }
         }
         await control.progress(items.count, items.count)
         return true
     }
 
     static func previewUpdate(for item: IndexedItem) -> AnalysisUpdate {
+        previewUpdate(for: item, asset: PhotoLibraryService.asset(item.sourceIdentifier))
+    }
+
+    static func previewUpdate(for item: IndexedItem, asset: PHAsset?) -> AnalysisUpdate {
         var update = AnalysisUpdate(id: item.id)
-        guard let asset = PhotoLibraryService.asset(item.sourceIdentifier) else {
+        guard let asset else {
             update.status = .failed
             return update
         }
@@ -112,6 +156,7 @@ actor PhotoAnalysisPipeline {
     func buildSimilarityGroups(
         items: [IndexedItem],
         onlyUnchecked: Bool,
+        thresholds: SimilarityThresholds = .standard,
         control: ScanControl
     ) async -> SimilarityResult {
         let images = items
@@ -144,7 +189,7 @@ actor PhotoAnalysisPipeline {
         }
 
         // Scatti consecutivi: catene di foto distanti tra loro meno della finestra temporale.
-        let window = AppConfiguration.Thresholds.similarTimeWindow
+        let window = thresholds.timeWindow
         let limit = AppConfiguration.Thresholds.similarBucketLimit
         var buckets: [[IndexedItem]] = []
         var current: [IndexedItem] = []
@@ -167,11 +212,9 @@ actor PhotoAnalysisPipeline {
         var completed = 0
         for bucket in pending {
             let clusters = autoreleasepool {
-                Self.clusters(in: bucket) { first, second in
+                Self.clusters(in: bucket, hashDistance: thresholds.hashDistance) { first, second in
                     let bothScreenshots = first.traits.contains(.screenshot) && second.traits.contains(.screenshot)
-                    return bothScreenshots
-                        ? AppConfiguration.Thresholds.similarScreenshotDistance
-                        : AppConfiguration.Thresholds.similarFeatureDistance
+                    return bothScreenshots ? thresholds.screenshotDistance : thresholds.featureDistance
                 }
             }
             for cluster in clusters {
@@ -207,11 +250,14 @@ actor PhotoAnalysisPipeline {
     /// Raggruppa gli elementi le cui anteprime distano meno della soglia indicata per la coppia.
     private static func clusters(
         in bucket: [IndexedItem],
+        hashDistance: Int,
         threshold: (IndexedItem, IndexedItem) -> Float
     ) -> [[IndexedItem]] {
+        // Le impronte visive sono la parte costosa: si calcolano in parallelo, una per scatto.
+        let observations = featurePrints(for: bucket)
         var entries: [(item: IndexedItem, observation: VNFeaturePrintObservation?)] = []
-        for item in bucket {
-            let observation = featurePrint(for: item)
+        for (index, item) in bucket.enumerated() {
+            let observation = observations[index]
             if observation == nil && item.perceptualHash == nil { continue }
             entries.append((item, observation))
         }
@@ -228,7 +274,7 @@ actor PhotoAnalysisPipeline {
                     if distance < threshold(firstItem, secondItem) {
                         sets.union(first, second)
                     }
-                } else if hashesLookAlike(firstItem, secondItem) {
+                } else if hashesLookAlike(firstItem, secondItem, maxDistance: hashDistance) {
                     sets.union(first, second)
                 }
             }
@@ -240,54 +286,73 @@ actor PhotoAnalysisPipeline {
 
     /// Confronto di riserva per quando Vision non riesce a produrre l'impronta di un'immagine
     /// (succede su alcuni dispositivi e simulatori): si usa l'hash percettivo delle anteprime.
-    private static func hashesLookAlike(_ first: IndexedItem, _ second: IndexedItem) -> Bool {
+    private static func hashesLookAlike(_ first: IndexedItem, _ second: IndexedItem, maxDistance: Int) -> Bool {
         guard let firstHash = first.perceptualHash, let secondHash = second.perceptualHash,
               ImageMetrics.isInformative(hash: firstHash), ImageMetrics.isInformative(hash: secondHash) else {
             return false
         }
-        return ImageMetrics.hammingDistance(firstHash, secondHash) <= AppConfiguration.Thresholds.similarHashDistance
+        return ImageMetrics.hammingDistance(firstHash, secondHash) <= maxDistance
     }
 
     private static func featurePrint(for item: IndexedItem) -> VNFeaturePrintObservation? {
-        guard let asset = PhotoLibraryService.asset(item.sourceIdentifier),
-              let image = AnalysisImageLoader.thumbnail(for: asset, maxSide: 360) else {
+        featurePrint(for: item, asset: PhotoLibraryService.asset(item.sourceIdentifier))
+    }
+
+    private static func featurePrint(for item: IndexedItem, asset: PHAsset?) -> VNFeaturePrintObservation? {
+        guard let asset, let image = AnalysisImageLoader.thumbnail(for: asset, maxSide: 360) else {
             return nil
         }
         return ImageAnalyzer.featurePrint(for: image)
     }
 
+    /// Impronte visive di più elementi, calcolate in parallelo e nello stesso ordine.
+    private static func featurePrints(for items: [IndexedItem]) -> [VNFeaturePrintObservation?] {
+        let assets = assetsByIdentifier(items)
+        return concurrentResults(count: items.count) { (index: Int) -> VNFeaturePrintObservation? in
+            let item = items[index]
+            return featurePrint(for: item, asset: assets[item.sourceIdentifier])
+        }
+    }
+
     // MARK: - Scelta dello scatto migliore
+
+    /// Elementi misurati insieme: le anteprime grandi (e, se consentito, scaricate da iCloud)
+    /// occupano memoria, quindi i blocchi sono più piccoli di quelli dell'analisi delle anteprime.
+    private static let shotChunkSize = 12
 
     /// Calcola, per i membri dei gruppi di foto simili, le misure che servono a scegliere lo scatto
     /// migliore: nitidezza dell'immagine e del soggetto, qualità dei volti, occhi aperti, giudizio estetico.
-    /// Restituisce `false` se l'analisi è stata interrotta.
+    /// Più scatti vengono misurati insieme. Restituisce `false` se l'analisi è stata interrotta.
     func analyzeShots(
         items: [IndexedItem],
         control: ScanControl,
         apply: @Sendable ([AnalysisUpdate]) async -> Void
     ) async -> Bool {
-        var pending: [AnalysisUpdate] = []
-        var processed = 0
-        for item in items {
+        var start = 0
+        while start < items.count {
+            let chunk = Array(items[start..<min(start + Self.shotChunkSize, items.count)])
             let allowNetwork = await control.networkAllowed()
-            let metrics = autoreleasepool { Self.shotMetrics(for: item, allowNetwork: allowNetwork) }
-            if let metrics {
+            let assets = Self.assetsByIdentifier(chunk)
+            let updates = Self.concurrentResults(count: chunk.count) { (index: Int) -> AnalysisUpdate? in
+                let item = chunk[index]
+                guard let metrics = Self.shotMetrics(
+                    for: item,
+                    asset: assets[item.sourceIdentifier],
+                    allowNetwork: allowNetwork
+                ) else {
+                    return nil
+                }
                 var update = AnalysisUpdate(id: item.id)
                 update.shot = metrics
-                pending.append(update)
+                return update
             }
-            processed += 1
-            if processed % 12 == 0 {
-                if !pending.isEmpty {
-                    await apply(pending)
-                    pending.removeAll(keepingCapacity: true)
-                }
-                await control.progress(processed, items.count)
-                if !(await control.shouldContinue()) { return false }
+            let measured = updates.compactMap { $0 }
+            if !measured.isEmpty {
+                await apply(measured)
             }
-        }
-        if !pending.isEmpty {
-            await apply(pending)
+            start += chunk.count
+            await control.progress(start, items.count)
+            if !(await control.shouldContinue()) { return false }
         }
         await control.progress(items.count, items.count)
         return true
@@ -296,8 +361,13 @@ actor PhotoAnalysisPipeline {
     /// Misure di uno scatto, lette da un'anteprima abbastanza grande da distinguere due foto simili.
     /// Restituisce `nil` se sul dispositivo è disponibile soltanto una miniatura.
     static func shotMetrics(for item: IndexedItem, allowNetwork: Bool) -> ShotMetrics? {
+        guard item.source == .photoLibrary else { return nil }
+        return shotMetrics(for: item, asset: PhotoLibraryService.asset(item.sourceIdentifier), allowNetwork: allowNetwork)
+    }
+
+    static func shotMetrics(for item: IndexedItem, asset: PHAsset?, allowNetwork: Bool) -> ShotMetrics? {
         guard item.source == .photoLibrary,
-              let asset = PhotoLibraryService.asset(item.sourceIdentifier),
+              let asset,
               let image = AnalysisImageLoader.thumbnail(
                   for: asset,
                   maxSide: CGFloat(AppConfiguration.Thresholds.shotAnalysisSide),
@@ -562,5 +632,28 @@ actor PhotoAnalysisPipeline {
                 continuation.resume(returning: avAsset)
             }
         }
+    }
+}
+
+/// Risultati raccolti da più thread, ciascuno nella propria posizione. Le scritture sono protette
+/// da un lucchetto; la lettura finale avviene quando tutti i thread hanno finito.
+private final class ConcurrentSlots<Value>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: [Value?]
+
+    init(count: Int) {
+        storage = Array(repeating: nil, count: count)
+    }
+
+    func store(_ value: Value?, at index: Int) {
+        lock.lock()
+        storage[index] = value
+        lock.unlock()
+    }
+
+    var values: [Value?] {
+        lock.lock()
+        defer { lock.unlock() }
+        return storage
     }
 }
