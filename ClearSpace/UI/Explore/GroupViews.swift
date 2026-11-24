@@ -47,13 +47,23 @@ struct GroupListView: View {
     @State private var isLoading = true
     @State private var confirmsMarkAll = false
     @State private var toast: String?
+    @State private var lastReload: Date?
 
     var body: some View {
         List {
             Section {
                 explanation
+                if entries.contains(where: { !$0.isDecided }) {
+                    // Il modo più rapido: tutti i gruppi in una schermata, in ognuno resta la migliore.
+                    NavigationLink {
+                        GroupBatchView(collection: collection)
+                    } label: {
+                        batchLabel
+                    }
+                    .accessibilityIdentifier("groups.batch")
+                }
                 if !entries.isEmpty {
-                    // Il modo più rapido: si aprono i gruppi da decidere uno dopo l'altro.
+                    // Oppure un gruppo alla volta, guardandoli uno per uno.
                     NavigationLink {
                         GroupSequenceView(collection: collection)
                     } label: {
@@ -80,7 +90,13 @@ struct GroupListView: View {
             }
         }
         .navigationTitle(collection.title)
-        .onAppear { env.recordTutorial(.openGroups) }
+        .onAppear {
+            env.recordTutorial(.openGroups)
+            // Al ritorno da una galleria la scelta fatta là si vede subito, anche durante un'analisi.
+            if !entries.isEmpty {
+                reload()
+            }
+        }
         .toolbar {
             if collection.usesDuplicateGroups && !entries.isEmpty {
                 ToolbarItem(placement: .primaryAction) {
@@ -103,6 +119,14 @@ struct GroupListView: View {
             Text("Per ogni gruppo di duplicati verificati resta l'elemento suggerito; gli altri vengono aggiunti alla lista di revisione. Nulla viene eliminato finché non confermi.")
         }
         .task(id: env.listRevision) {
+            // Durante un'analisi l'elenco già mostrato si aggiorna al massimo ogni pochi secondi.
+            if !entries.isEmpty, env.scan.isRunning, let lastReload {
+                let wait = ScanThrottle.wait(since: lastReload, now: Date())
+                if wait > 0 {
+                    try? await Task.sleep(for: .seconds(wait))
+                    guard !Task.isCancelled else { return }
+                }
+            }
             reload()
         }
         .toast($toast)
@@ -111,10 +135,32 @@ struct GroupListView: View {
     @ViewBuilder
     private var explanation: some View {
         if collection.usesDuplicateGroups {
-            InfoBanner(text: "I duplicati esatti hanno lo stesso contenuto, verificato sull'originale. I probabili duplicati sono stati confrontati solo tramite le anteprime.")
+            InfoBanner(text: "Copie dello stesso contenuto. «Esatti» sono verificati sull'originale, «probabili» solo sulle anteprime.")
         } else {
-            InfoBanner(text: "Contenuti simili, non identici: ClearSpace suggerisce quale conservare, ma la scelta è tua. Puoi anche tenerli tutti.")
+            InfoBanner(text: "Scatti simili, non identici: ClearSpace consiglia quale tenere, ma decidi tu.")
         }
+    }
+
+    /// "Tieni la migliore in tutti i gruppi · 12 gruppi · fino a 340 MB".
+    private var batchLabel: some View {
+        let pending = entries.filter { !$0.isDecided }
+        let freeable = pending.reduce(Int64(0)) { $0 + $1.potentialBytes }
+        return HStack(spacing: 12) {
+            Image(systemName: "wand.and.stars")
+                .font(.title2)
+                .foregroundStyle(Theme.keep)
+                .frame(width: 34)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Tieni la migliore in tutti i gruppi")
+                    .font(.headline)
+                Text("Controlli tutto in una schermata ed elimini in un colpo solo · fino a \(Format.bytes(freeable))")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
     }
 
     /// "Decidi un gruppo dopo l'altro · 12 da decidere · fino a 340 MB da liberare".
@@ -141,8 +187,12 @@ struct GroupListView: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// Mentre si guarda l'elenco i gruppi già mostrati restano al loro posto, anche se l'analisi cambia
+    /// lo spazio che liberano: i nuovi arrivano in fondo. L'ordine completo si rifà alla riapertura.
     private func reload() {
-        entries = GroupCatalog.entries(for: collection, env: env)
+        lastReload = Date()
+        let fresh = GroupCatalog.entries(for: collection, env: env)
+        entries = StableOrder.merge(fresh, keeping: entries.map { $0.id }, id: { $0.id })
         isLoading = false
     }
 

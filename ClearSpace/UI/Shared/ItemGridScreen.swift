@@ -38,8 +38,12 @@ struct ItemQuery: Sendable {
 }
 
 /// Griglia di elementi con ordinamento, selezione multipla e avvio della modalità swipe.
-/// Con «Seleziona» si scelgono gli elementi a tocchi o trascinando il dito, come nell'app Foto.
-/// Le azioni disponibili cambiano soltanto lo stato di revisione o la protezione degli elementi.
+/// Con «Seleziona» si scelgono gli elementi a tocchi o trascinando il dito, come nell'app Foto, e
+/// «Elimina» li elimina subito (con la conferma di iOS); le altre azioni cambiano soltanto lo stato
+/// di revisione o la protezione degli elementi.
+///
+/// Mentre la si guarda la griglia non cambia ordine: se l'analisi aggiorna i dati, gli elementi già
+/// mostrati restano al loro posto e i nuovi arrivano in fondo (`StableOrder`).
 struct ItemGridScreen: View {
     let query: ItemQuery
     /// Numero massimo di elementi restituiti (per le ricerche con limite esplicito).
@@ -48,6 +52,8 @@ struct ItemGridScreen: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var items: [IndexedItem] = []
+    /// Ordinamento con cui sono disposti gli elementi mostrati.
+    @State private var arrangedBy: ItemSort?
     @State private var protectedIDs = Set<UUID>()
     @State private var totalBytes: Int64 = 0
     @State private var sort: ItemSort?
@@ -57,6 +63,16 @@ struct ItemGridScreen: View {
     @State private var selection = Set<UUID>()
     @State private var previewItem: IndexedItem?
     @State private var toast: String?
+    @State private var isDeleting = false
+    @State private var confirmsDeletion = false
+    @State private var pendingDeletion: [UUID] = []
+    /// Esito dell'ultima eliminazione fatta da qui: ricorda come liberare davvero lo spazio.
+    @State private var lastDeletion: DirectDeletionResult?
+    @State private var deletionsDone = 0
+    @State private var lastReload: Date?
+
+    /// Oltre questo numero di elementi ClearSpace chiede conferma anche per le sole foto.
+    private static var largeDeletion: Int { 100 }
 
     private var activeSort: ItemSort { sort ?? query.defaultSort }
 
@@ -116,6 +132,15 @@ struct ItemGridScreen: View {
             }
         }
         .task(id: ReloadKey(revision: env.listRevision, sort: activeSort)) {
+            // Durante un'analisi l'indice cambia di continuo: la griglia già mostrata si aggiorna al
+            // massimo ogni pochi secondi, così non lavora mentre si scorre.
+            if arrangedBy == activeSort, env.scan.isRunning, let lastReload {
+                let wait = ScanThrottle.wait(since: lastReload, now: Date())
+                if wait > 0 {
+                    try? await Task.sleep(for: .seconds(wait))
+                    guard !Task.isCancelled else { return }
+                }
+            }
             await reload()
         }
         .fullScreenCover(item: $previewItem) { item in
@@ -125,6 +150,19 @@ struct ItemGridScreen: View {
                 itemIDs: ItemPreviewScreen.window(items.prefix(visibleCount).map { $0.id }, around: item.id)
             )
         }
+        .confirmationDialog(
+            "Eliminare \(Format.plural(pendingDeletion.count, "elemento", "elementi"))?",
+            isPresented: $confirmsDeletion,
+            titleVisibility: .visible
+        ) {
+            Button("Elimina \(Format.plural(pendingDeletion.count, "elemento", "elementi"))", role: .destructive) {
+                performDeletion(pendingDeletion)
+            }
+            Button("Annulla", role: .cancel) {}
+        } message: {
+            Text(deletionMessage(for: pendingDeletion))
+        }
+        .sensoryFeedback(.success, trigger: deletionsDone)
         .toast($toast)
     }
 
@@ -141,9 +179,17 @@ struct ItemGridScreen: View {
                 Text("\(Format.plural(items.count, "elemento", "elementi")) · \(Format.bytes(totalBytes))")
                     .font(.subheadline.weight(.medium))
                 Spacer()
-                if isLoading {
+                // Solo al primo caricamento: dopo, un aggiornamento non deve spostare la griglia.
+                if isLoading && items.isEmpty {
                     ProgressView()
                 }
+            }
+            if let lastDeletion, lastDeletion.deletedCount > 0 {
+                InfoBanner(
+                    text: "Gli elementi eliminati restano 30 giorni in «Eliminati di recente» dell'app Foto: svuotalo per liberare subito lo spazio.",
+                    systemImage: "trash.circle.fill",
+                    tint: Theme.keep
+                )
             }
             if !items.isEmpty && !isSelecting {
                 Button {
@@ -190,12 +236,14 @@ struct ItemGridScreen: View {
                     Text(isSelecting ? "Fine" : "Seleziona")
                 }
             }
-            .disabled(items.isEmpty)
+            .disabled(items.isEmpty || isDeleting)
         }
     }
 
     private var selectionBar: some View {
-        VStack(spacing: 8) {
+        let chosen = items.filter { selection.contains($0.id) }
+        let bytes = chosen.reduce(Int64(0)) { $0 + $1.bytes }
+        return VStack(spacing: 8) {
             HStack {
                 Text(Format.plural(selection.count, "selezionato", "selezionati"))
                     .font(.subheadline.weight(.medium))
@@ -212,8 +260,36 @@ struct ItemGridScreen: View {
                 .font(.subheadline)
                 .lineLimit(1)
             }
+            Button {
+                deleteSelection(chosen)
+            } label: {
+                Group {
+                    if isDeleting {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        Label(
+                            chosen.isEmpty ? "Elimina" : "Elimina \(chosen.count) · \(Format.bytes(bytes))",
+                            systemImage: "trash"
+                        )
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Theme.remove)
+            .controlSize(.large)
+            .disabled(chosen.isEmpty || isDeleting)
+            .accessibilityIdentifier("grid.delete")
             HStack(spacing: 8) {
-                BarActionButton(title: "Da eliminare", systemImage: "trash", tint: Theme.remove) {
+                BarActionButton(
+                    title: "Revisione",
+                    systemImage: "tray.and.arrow.down",
+                    tint: Theme.info,
+                    accessibilityTitle: "Aggiungi alla Revisione"
+                ) {
                     markSelection()
                 }
                 BarActionButton(title: "Conserva", systemImage: "checkmark", tint: Theme.keep) {
@@ -226,7 +302,7 @@ struct ItemGridScreen: View {
                     finishSelection("Elementi protetti.")
                 }
             }
-            .disabled(selection.isEmpty)
+            .disabled(selection.isEmpty || isDeleting)
         }
         .padding(12)
         .background(.bar)
@@ -252,9 +328,73 @@ struct ItemGridScreen: View {
 
     private func finishSelection(_ message: String) {
         env.recordTutorial(.gridAction)
+        // La scelta va vista subito, anche durante un'analisi.
+        lastReload = nil
         selection.removeAll()
         isSelecting = false
         toast = message
+    }
+
+    /// «Elimina»: per foto e video basta la conferma di iOS; per i file, per i contenuti che potrebbero
+    /// essere importanti e per le selezioni molto grandi chiede prima anche ClearSpace.
+    private func deleteSelection(_ chosen: [IndexedItem]) {
+        guard !chosen.isEmpty, !isDeleting else { return }
+        let ids = chosen.map { $0.id }
+        if env.needsInAppConfirmation(chosen) || chosen.count > Self.largeDeletion {
+            pendingDeletion = ids
+            confirmsDeletion = true
+        } else {
+            performDeletion(ids)
+        }
+    }
+
+    private func performDeletion(_ ids: [UUID]) {
+        guard !ids.isEmpty, !isDeleting else { return }
+        isDeleting = true
+        let chosen = env.store.items(ids)
+        let isImage = !chosen.isEmpty && chosen.allSatisfy { $0.isImage }
+        let isVideo = !chosen.isEmpty && chosen.allSatisfy { $0.isVideo }
+        Task {
+            let result = await env.deleteDirectly(delete: ids)
+            isDeleting = false
+            pendingDeletion = []
+            switch result.outcome {
+            case .cancelled:
+                toast = "Eliminazione annullata: non è stato eliminato nulla."
+            case .nothing:
+                toast = result.note ?? "Non è stato eliminato nulla."
+            case .deleted:
+                deletionsDone += 1
+                lastDeletion = result
+                env.recordTutorial(.gridAction)
+                selection.removeAll()
+                isSelecting = false
+                toast = result.summary(isImage: isImage, isVideo: isVideo)
+            }
+        }
+    }
+
+    private func deletionMessage(for ids: [UUID]) -> String {
+        let chosen = env.store.items(ids)
+        let bytes = chosen.reduce(Int64(0)) { $0 + $1.bytes }
+        var parts = ["Liberi fino a \(Format.bytes(bytes))."]
+        if chosen.contains(where: { $0.source == .photoLibrary }) {
+            parts.append("Foto e video restano 30 giorni in «Eliminati di recente» dell'app Foto e, con Foto di iCloud, spariscono anche dagli altri dispositivi.")
+        }
+        if chosen.contains(where: { $0.source != .photoLibrary }) {
+            parts.append("I file vanno nel cestino dell'app File, se il servizio lo consente.")
+        }
+        let evaluator = env.safety.evaluator()
+        let cautious = chosen.filter { evaluator.needsCaution($0) }.count
+        if cautious > 0 {
+            parts.append(cautious == 1
+                         ? "Attenzione: uno potrebbe contenere qualcosa di importante."
+                         : "Attenzione: \(cautious) potrebbero contenere qualcosa di importante.")
+        }
+        if chosen.contains(where: { $0.source == .photoLibrary }) {
+            parts.append("iOS ti chiederà ancora una conferma.")
+        }
+        return parts.joined(separator: " ")
     }
 
     private func startSwipe() {
@@ -266,6 +406,7 @@ struct ItemGridScreen: View {
 
     private func reload() async {
         isLoading = true
+        lastReload = Date()
         let input = env.plannerInput()
         let predicate = query.predicate
         let order = activeSort
@@ -289,7 +430,13 @@ struct ItemGridScreen: View {
         }.value
 
         guard !Task.isCancelled else { return }
-        items = result.items
+        // Stesso ordinamento di prima: ciò che è già sullo schermo resta dov'è.
+        if arrangedBy == order {
+            items = StableOrder.merge(result.items, keeping: items.map { $0.id }, id: { $0.id })
+        } else {
+            items = result.items
+            arrangedBy = order
+        }
         protectedIDs = result.locked
         totalBytes = result.bytes
         selection.formIntersection(Set(result.items.map { $0.id }))

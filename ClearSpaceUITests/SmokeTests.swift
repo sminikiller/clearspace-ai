@@ -21,9 +21,12 @@ final class SmokeTests: UITestCase {
         app.tabBars.buttons["Analizza"].tap()
         XCTAssertTrue(analysisCompleted.waitForExistence(timeout: 300), "L'analisi non è terminata")
 
-        // Pulizia guidata → foto simili: nello swipe devono comparire tutti gli scatti del gruppo
+        // Home: «Da dove iniziare» porta subito ai gruppi di foto simili da decidere
         app.tabBars.buttons["Home"].tap()
         pause(1)
+        checkHomeStartPoints()
+
+        // Pulizia guidata → foto simili: nello swipe devono comparire tutti gli scatti del gruppo
         reviewSimilarShotsInSwipe()
 
         // Esplora → Foto → Foto simili → primo gruppo
@@ -48,6 +51,7 @@ final class SmokeTests: UITestCase {
         }
         capture("40-foto-simili")
         checkGroupSequence()
+        checkGroupBatch()
         bringIntoView(groupRow)
         groupRow.tap()
 
@@ -324,8 +328,9 @@ final class SmokeTests: UITestCase {
         pause(1)
     }
 
-    /// «Elimina» nella galleria di un gruppo: prima la conferma di ClearSpace, poi quella di iOS.
-    /// Annullando quest'ultima non viene eliminato nulla e le scelte restano com'erano.
+    /// «Elimina» nella galleria di un gruppo: per le foto basta la conferma di iOS (ClearSpace chiede la
+    /// sua solo per file e contenuti importanti). Annullandola non viene eliminato nulla e le scelte
+    /// restano com'erano.
     private func checkCancelledDeletion(counter: XCUIElement, expected: String) {
         let delete = app.buttons["group.delete"]
         guard delete.waitForExistence(timeout: 5), delete.isEnabled else {
@@ -336,14 +341,12 @@ final class SmokeTests: UITestCase {
         let confirm = app.buttons
             .matching(NSPredicate(format: "label BEGINSWITH %@ AND label ENDSWITH %@", "Elimina ", " foto"))
             .firstMatch
-        guard confirm.waitForExistence(timeout: 5) else {
-            capture("40c-conferma-mancante")
-            XCTFail("«Elimina» non chiede conferma")
-            return
+        if confirm.waitForExistence(timeout: 2) {
+            capture("40c-conferma-elimina")
+            confirm.tap()
         }
-        pause(0.5)
-        capture("40c-conferma-elimina")
-        confirm.tap()
+        pause(1)
+        capture("40c-conferma-di-ios")
         XCTAssertTrue(
             tapSystemButton(["Don\u{2019}t Allow", "Don't Allow", "Non consentire"], timeout: 30),
             "Manca la conferma di sistema di iOS"
@@ -386,14 +389,34 @@ final class SmokeTests: UITestCase {
             "La proposta all'apertura non è quella attesa (\(counter.label))"
         )
 
-        // Trascinando il dito dalla prima alla terza anteprima cambiano tutte e tre
-        dragAcrossGrid(from: 0, to: 2)
+        // Con tre foto la galleria usa due colonne: le anteprime sono grandi
+        if gridCell(0).exists && gridCell(2).exists {
+            XCTAssertGreaterThan(
+                gridCell(2).frame.minY,
+                gridCell(0).frame.maxY - 1,
+                "In un gruppo di tre foto la terza deve stare nella seconda riga (due colonne)"
+            )
+        }
+
+        // Trascinando il dito sulla prima riga le due foto prendono la stessa scelta, opposta a quella
+        // che aveva la prima
+        let firstWasKept = gridCell(0).label.contains("da tenere")
+        let dragged = firstWasKept ? "da eliminare" : "da tenere"
+        dragAcrossGrid(from: 0, to: 1)
         XCTAssertTrue(
-            waitForLabel(counter, "3 da eliminare · 0 da tenere", timeout: 4),
-            "Il trascinamento non ha cambiato le tre foto (\(counter.label))"
+            waitForLabel(gridCell(0), containing: dragged, timeout: 4) && gridCell(1).label.contains(dragged),
+            "Il trascinamento non ha cambiato le foto della prima riga (\(counter.label))"
         )
         pause(0.5)
         capture("38b-griglia-trascinamento")
+
+        // Scelta rapida dal menu: tutte da eliminare
+        if chooseFromMenu("Segna tutte da eliminare") {
+            XCTAssertTrue(
+                waitForLabel(counter, "3 da eliminare · 0 da tenere", timeout: 4),
+                "«Segna tutte da eliminare» non ha cambiato le tre foto (\(counter.label))"
+            )
+        }
 
         // Due tocchi rimettono la seconda e la terza tra quelle da tenere
         gridCell(1).tap()
@@ -457,6 +480,94 @@ final class SmokeTests: UITestCase {
         } else {
             XCTFail("Manca il pulsante per annullare la scelta fatta nella griglia")
         }
+    }
+
+    /// Dalla Home, «Foto simili» in «Da dove iniziare» apre l'elenco dei gruppi da decidere.
+    private func checkHomeStartPoints() {
+        let row = app.descendants(matching: .any)["home.start.similarPhotos"]
+        bringIntoView(row)
+        guard row.exists else {
+            capture("03b-home-senza-da-dove-iniziare")
+            XCTFail("Nella Home manca «Foto simili» in «Da dove iniziare»")
+            return
+        }
+        capture("03b-home-da-dove-iniziare")
+        row.tap()
+        guard app.navigationBars["Foto simili"].waitForExistence(timeout: 10) else {
+            capture("03c-home-riga-non-aperta")
+            XCTFail("«Foto simili» nella Home non apre l'elenco dei gruppi (\(currentTitle))")
+            return
+        }
+        XCTAssertTrue(
+            app.descendants(matching: .any)["groups.batch"].waitForExistence(timeout: 10),
+            "Nell'elenco dei gruppi manca «Tieni la migliore in tutti i gruppi»"
+        )
+        pause(1)
+        capture("03c-home-foto-simili")
+        goBack()
+    }
+
+    /// «Tieni la migliore in tutti i gruppi»: il gruppo di prova ha una foto che resta (quella con la
+    /// stella) e due da eliminare. Escludere il gruppo spegne «Elimina»; «Elimina» passa dalla conferma
+    /// di iOS e annullandola non cambia nulla.
+    private func checkGroupBatch() {
+        let start = app.descendants(matching: .any)["groups.batch"]
+        guard start.waitForExistence(timeout: 5) else {
+            XCTFail("Nell'elenco dei gruppi manca «Tieni la migliore in tutti i gruppi»")
+            return
+        }
+        bringIntoView(start)
+        start.tap()
+        let summary = app.staticTexts["batch.summary"]
+        guard summary.waitForExistence(timeout: 10) else {
+            capture("39c-tutti-i-gruppi-non-aperto")
+            XCTFail("La schermata «Tutti i gruppi» non si è aperta")
+            goBack()
+            return
+        }
+        pause(1.5)
+        capture("39c-tutti-i-gruppi")
+        let expected = "2 foto da eliminare in 1 gruppo"
+        XCTAssertTrue(waitForLabel(summary, expected, timeout: 4), "Tutti i gruppi: proposta inattesa (\(summary.label))")
+
+        // Il cerchio esclude il gruppo: non resta nulla da eliminare
+        let toggle = app.buttons["batch.toggle"].firstMatch
+        let delete = app.buttons["batch.delete"]
+        if toggle.waitForExistence(timeout: 3) {
+            toggle.tap()
+            XCTAssertTrue(waitForLabel(summary, "Nessun gruppo incluso", timeout: 4), "Escludere il gruppo non ha cambiato il riepilogo (\(summary.label))")
+            XCTAssertFalse(delete.isEnabled, "Con il gruppo escluso «Elimina» deve essere spento")
+            toggle.tap()
+            XCTAssertTrue(waitForLabel(summary, expected, timeout: 4), "Il gruppo non è tornato incluso (\(summary.label))")
+        } else {
+            XCTFail("Tutti i gruppi: manca il cerchio per escludere un gruppo")
+        }
+
+        // «Elimina» chiede la conferma di iOS: annullandola tutto resta com'era
+        guard delete.exists, delete.isEnabled else {
+            XCTFail("Tutti i gruppi: «Elimina» manca o è spento")
+            goBack()
+            return
+        }
+        delete.tap()
+        let confirm = app.buttons
+            .matching(NSPredicate(format: "label BEGINSWITH %@ AND label ENDSWITH %@", "Elimina ", " foto"))
+            .firstMatch
+        if confirm.waitForExistence(timeout: 2) {
+            confirm.tap()
+        }
+        XCTAssertTrue(
+            tapSystemButton(["Don\u{2019}t Allow", "Don't Allow", "Non consentire"], timeout: 30),
+            "Tutti i gruppi: manca la conferma di sistema di iOS"
+        )
+        XCTAssertTrue(
+            element(containing: "Eliminazione annullata").waitForExistence(timeout: 10),
+            "Tutti i gruppi: dopo l'annullamento della conferma di iOS non compare il messaggio"
+        )
+        pause(0.5)
+        capture("39d-tutti-i-gruppi-annullato")
+        XCTAssertTrue(waitForLabel(summary, expected, timeout: 5), "Dopo l'annullamento la proposta è cambiata (\(summary.label))")
+        goBack()
     }
 
     /// In cima all'elenco dei gruppi «Decidi un gruppo dopo l'altro» apre il primo gruppo da decidere,
@@ -605,6 +716,10 @@ final class SmokeTests: UITestCase {
                 waitForLabel(counter, expected, timeout: 4),
                 "Il trascinamento nella griglia non ha selezionato le celle attese (\(counter.label), attese \(expected))"
             )
+            // Con una selezione «Elimina» è pronto (qui non lo si tocca: le foto servono alle altre prove)
+            let delete = app.buttons["grid.delete"]
+            XCTAssertTrue(delete.exists && delete.isEnabled, "Nella selezione manca «Elimina», oppure è spento")
+            XCTAssertTrue(delete.label.hasPrefix("Elimina"), "Etichetta inattesa per «Elimina»: \(delete.label)")
             pause(0.5)
             capture("24b-griglia-selezione-rapida")
         } else {

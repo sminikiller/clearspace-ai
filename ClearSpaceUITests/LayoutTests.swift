@@ -25,8 +25,48 @@ final class LayoutTests: UITestCase {
         // La galleria ha proposto le foto simili per l'eliminazione: la Revisione le mostra e poi le
         // ripristina, così tornano da decidere e lo swipe le presenta con la striscia dei simili.
         reviewScreens()
+        startAndBatchScreens()
         swipeScreens()
         resultsScreens()
+    }
+
+    // MARK: - Da dove iniziare e tutti i gruppi
+
+    /// Con le foto simili di nuovo da decidere: la riga «Foto simili» della Home e la schermata
+    /// «Tutti i gruppi», con il testo grande. Nulla viene deciso.
+    private func startAndBatchScreens() {
+        app.tabBars.buttons["Home"].tap()
+        pause(1)
+        let row = app.descendants(matching: .any)["home.start.similarPhotos"]
+        bringIntoView(row)
+        guard row.exists, row.isHittable else {
+            XCTFail("Home: «Foto simili» in «Da dove iniziare» non si raggiunge")
+            return
+        }
+        checkLayout("L49b-home-da-dove-iniziare")
+        row.tap()
+        pause(1.5)
+        let batch = app.descendants(matching: .any)["groups.batch"]
+        bringIntoView(batch)
+        guard batch.exists, batch.isHittable else {
+            XCTFail("Gruppi: «Tieni la migliore in tutti i gruppi» non si raggiunge")
+            goBack()
+            scrollToTop()
+            return
+        }
+        checkLayout("L49c-gruppi-dalla-home")
+        batch.tap()
+        if app.staticTexts["batch.summary"].waitForExistence(timeout: 10) {
+            pause(1)
+            checkLayout("L49d-tutti-i-gruppi")
+            checkReachable(app.buttons["batch.delete"], "Tutti i gruppi: «Elimina»")
+            checkReachable(app.buttons["batch.review"], "Tutti i gruppi: «Aggiungi alla Revisione»")
+        } else {
+            XCTFail("La schermata «Tutti i gruppi» non si è aperta")
+        }
+        goBack()
+        goBack()
+        scrollToTop()
     }
 
     // MARK: - Supporto
@@ -257,12 +297,13 @@ final class LayoutTests: UITestCase {
                 gridCell(1).tap()
             }
             checkLayout("L23-griglia-selezione")
-            let mark = app.buttons["Da eliminare"]
+            checkReachable(app.buttons["grid.delete"], "Griglia: «Elimina»")
+            let mark = app.buttons["Aggiungi alla Revisione"]
             if mark.exists && mark.isHittable {
                 mark.tap()
                 pause(1)
             } else {
-                XCTFail("Griglia: il pulsante «Da eliminare» non si raggiunge")
+                XCTFail("Griglia: il pulsante «Revisione» non si raggiunge")
                 let done = app.navigationBars.buttons["Fine"]
                 if done.exists { done.tap() }
             }

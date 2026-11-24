@@ -163,19 +163,30 @@ struct CollectionLink: View {
     var body: some View {
         let isLocked = !env.plan.isUnlocked(collection.requiredFeature)
         NavigationLink {
-            if isLocked, let feature = collection.requiredFeature {
-                LockedFeatureView(feature: feature)
-            } else if collection.isGroupBased {
-                GroupListView(collection: collection)
-            } else {
-                ItemGridScreen(query: .collection(collection))
-            }
+            CollectionDestination(collection: collection)
         } label: {
             CollectionRow(
                 collection: collection,
                 stat: env.store.summary.stat(collection),
                 isLocked: isLocked
             )
+        }
+    }
+}
+
+/// Schermata di una categoria: l'elenco dei gruppi, la griglia oppure l'avviso del piano.
+struct CollectionDestination: View {
+    let collection: SmartCollection
+
+    @Environment(AppEnvironment.self) private var env
+
+    var body: some View {
+        if !env.plan.isUnlocked(collection.requiredFeature), let feature = collection.requiredFeature {
+            LockedFeatureView(feature: feature)
+        } else if collection.isGroupBased {
+            GroupListView(collection: collection)
+        } else {
+            ItemGridScreen(query: .collection(collection))
         }
     }
 }

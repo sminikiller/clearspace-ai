@@ -42,6 +42,8 @@ struct GroupSequenceView: View {
 
     var body: some View {
         content
+            // Una leggera vibrazione quando un gruppo è stato eliminato e si passa al successivo.
+            .sensoryFeedback(.success, trigger: deletedCount)
             .toast($toast)
             .onAppear {
                 guard queue == nil else { return }

@@ -11,6 +11,7 @@ enum TutorialEvent: String, CaseIterable, Sendable {
     // Simili: striscia, galleria, stelle
     case stripSelect, stripMenu, keepBest, keepOnlyCurrent
     case openGallery, galleryToggle, dragSelect, quickSelect, galleryOrder, galleryMenu, starBest, removeStar, groupSequence
+    case groupBatch
     // Confronto
     case openCompare, compareZoom, compareStep, compareDecision
     // Esplora e griglie
@@ -247,7 +248,7 @@ enum TutorialCatalog {
                      check: "In basso il conteggio cambia: «N da eliminare · M da tenere».",
                      event: .galleryToggle),
                 task("gallery.drag", "Cambia tante foto trascinando il dito",
-                     howTo: "Appoggia il dito su una foto e trascinalo in orizzontale sulle altre; poi, senza staccare, scendi alla riga sotto. Un gesto verticale fa invece scorrere la griglia.",
+                     howTo: "Appoggia il dito su una foto e trascinalo di lato, ben in orizzontale, sulle altre; poi, senza staccare, scendi alla riga sotto. Un gesto verticale o in diagonale fa invece scorrere la griglia, e non cambia nessuna scelta.",
                      check: "Tutte le foto toccate prendono la stessa scelta: se la prima era da tenere diventano da eliminare, e viceversa.",
                      event: .dragSelect),
                 task("gallery.quick", "Usa una scelta rapida",
@@ -271,13 +272,17 @@ enum TutorialCatalog {
                      check: "L'azione scelta vale per quella sola foto.",
                      event: .galleryMenu),
                 task("gallery.delete", "Elimina le foto scartate",
-                     howTo: "Con le foto da eliminare segnate dal cestino tocca «Elimina N» in basso, conferma, poi conferma anche l'avviso di iOS.",
+                     howTo: "Con le foto da eliminare segnate dal cestino tocca «Elimina N» in basso e conferma l'avviso di iOS. Per file e contenuti importanti ClearSpace chiede prima anche la sua conferma.",
                      check: "Le foto spariscono dal gruppo e restano 30 giorni in «Eliminati di recente» dell'app Foto.",
                      event: nil),
                 task("gallery.sequence", "Decidi un gruppo dopo l'altro",
-                     howTo: "Nell'elenco delle Foto simili tocca «Decidi un gruppo dopo l'altro» (dalla Home: «Scegli le foto migliori»). In ogni gruppo tocca «Elimina» o «Tieni tutte», oppure «Salta» in alto per lasciarlo da decidere.",
+                     howTo: "Nell'elenco delle Foto simili (dalla Home: «Foto simili» in «Da dove iniziare») tocca «Decidi un gruppo dopo l'altro». In ogni gruppo tocca «Elimina» o «Tieni tutte», oppure «Salta» in alto per lasciarlo da decidere.",
                      check: "In alto leggi «Gruppo 1 di N»; dopo la scelta compare da solo il gruppo successivo e alla fine il riepilogo.",
-                     event: .groupSequence)
+                     event: .groupSequence),
+                task("gallery.batch", "Decidi tutti i gruppi in una volta",
+                     howTo: "Nell'elenco delle Foto simili tocca «Tieni la migliore in tutti i gruppi». Controlla le foto con il cestino, escludi con il cerchio i gruppi da lasciare stare, poi tocca «Elimina» e conferma l'avviso di iOS.",
+                     check: "Vedi tutti i gruppi in una schermata; dopo la conferma resta la migliore di ognuno e le altre vanno in «Eliminati di recente».",
+                     event: .groupBatch)
             ]
         ),
         Tutorial(

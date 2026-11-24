@@ -46,28 +46,28 @@ struct ReleaseNote: Identifiable {
     static let current: [ReleaseNote] = [
         ReleaseNote(
             systemImage: "hand.draw",
-            title: "Scorrere non seleziona più",
-            text: "Nelle gallerie e nelle griglie uno scorrimento, anche storto o con la lista ancora in movimento, fa sempre scorrere: la selezione parte solo trascinando il dito chiaramente di lato."
+            title: "Le griglie scorrono sempre",
+            text: "Scorrimento e selezione si decidono prima che la griglia si muova: un gesto verticale o storto scorre sempre, la selezione parte solo trascinando di lato su una foto, e nulla può più restare bloccato. Durante l'analisi gli elenchi non si riordinano più sotto il dito."
         ),
         ReleaseNote(
-            systemImage: "square.grid.3x3",
-            title: "Gruppi decisi in un tocco",
-            text: "Aprendo un gruppo la migliore ha già il segno verde e le altre il cestino: un tocco cambia la scelta di una foto, «Elimina» elimina subito le altre (con la conferma di iOS) e «Tieni tutte» le conserva."
+            systemImage: "wand.and.stars",
+            title: "Tutti i gruppi in una volta",
+            text: "Nelle Foto simili «Tieni la migliore in tutti i gruppi» mostra ogni gruppo con la foto che resta e quelle da eliminare: escludi quelli da lasciare stare ed elimini il resto con una sola conferma."
         ),
         ReleaseNote(
-            systemImage: "arrow.left.and.right",
-            title: "Scorri tra le foto",
-            text: "A tutto schermo passi alla foto vicina scorrendo di lato, come in Foto. Nel confronto la foto segue il dito, anche con lo zoom attivo."
+            systemImage: "flag.checkered",
+            title: "Da dove iniziare",
+            text: "La Home mostra subito dove c'è più spazio da liberare (foto simili, duplicati, video grandi, screenshot vecchi, foto sfocate) e ti porta lì con un tocco."
         ),
         ReleaseNote(
-            systemImage: "infinity",
-            title: "Griglie senza fine",
-            text: "Le griglie lunghe caricano da sole le foto successive mentre scorri, senza il pulsante «Mostra altri»."
+            systemImage: "trash",
+            title: "Elimina direttamente, con una sola conferma",
+            text: "Per foto e video basta la conferma di iOS, nella galleria di un gruppo come nelle griglie: dopo «Seleziona» c'è «Elimina». ClearSpace chiede anche la sua solo per file, contenuti importanti o selezioni molto grandi."
         ),
         ReleaseNote(
-            systemImage: "rectangle.compress.vertical",
-            title: "Schermate più ordinate",
-            text: "Meno testo e barre più basse nella galleria e nella Revisione, un solo segno per foto, pulsanti spenti ben riconoscibili in tema scuro e niente bande nere sulle carte dello swipe."
+            systemImage: "square.grid.2x2",
+            title: "Foto più grandi nei gruppi piccoli",
+            text: "Nei gruppi fino a quattro scatti la galleria usa due colonne: si giudicano senza aprirli. Le scelte non cambiano più da sole se il consiglio si aggiorna mentre decidi."
         )
     ]
 }
@@ -144,7 +144,7 @@ struct AboutView: View {
             Section("La tua privacy") {
                 privacyRow("iphone", "Le analisi avvengono sul dispositivo: foto, video e documenti non lasciano l'iPhone.")
                 privacyRow("lock.shield", "L'indice dei contenuti è cifrato e contiene solo riferimenti, mai copie dei file.")
-                privacyRow("hand.raised", "Nulla viene eliminato senza la tua conferma: ClearSpace chiede sempre prima, e per foto e video chiede anche iOS.")
+                privacyRow("hand.raised", "Nulla viene eliminato senza la tua conferma: per foto e video la chiede iOS, per file e contenuti importanti anche ClearSpace.")
                 privacyRow("eye.slash", "Nessun account, nessuna pubblicità, nessun dato inviato a server.")
                 NavigationLink("Cosa può fare ClearSpace su iPhone") {
                     CapabilitiesInfoView()
@@ -315,14 +315,16 @@ struct QuickGuideView: View {
             Section("Foto e video simili") {
                 guideRow("square.stack.3d.down.right", "Striscia sotto la carta", "Mostra tutto il gruppo: tocca un'anteprima per portarla sulla carta (un video parte subito).")
                 guideRow("square.grid.3x3", "Galleria del gruppo", "La migliore ha il segno verde, le altre il cestino: un tocco cambia la scelta, «Elimina» elimina subito le altre (iOS chiede conferma). Le frecce su un'anteprima la aprono a tutto schermo.")
-                guideRow("rectangle.stack.badge.play", "Un gruppo dopo l'altro", "Dalla Home «Scegli le foto migliori», oppure in cima all'elenco dei gruppi: dopo «Elimina» o «Tieni tutte» compare da solo il gruppo successivo. «Salta» lo lascia da decidere.")
+                guideRow("wand.and.stars", "Tutti i gruppi in una volta", "In cima all'elenco dei gruppi, «Tieni la migliore in tutti i gruppi»: controlli ogni gruppo, escludi quelli dubbi ed elimini il resto con una sola conferma di iOS.")
+                guideRow("rectangle.stack.badge.play", "Un gruppo dopo l'altro", "Sotto, «Decidi un gruppo dopo l'altro»: dopo «Elimina» o «Tieni tutte» compare da solo il gruppo successivo. «Salta» lo lascia da decidere. Dalla Home ci arrivi da «Da dove iniziare».")
                 guideRow("star.fill", "Stella", "Segna le tue migliori: restano sempre e nella galleria hanno già il segno verde.")
                 guideRow("sparkles", "Consiglio", "Le scintille indicano lo scatto che l'app ritiene migliore, con il motivo: nitidezza, volti, occhi aperti, esposizione.")
                 guideRow("rectangle.split.2x1", "Confronta", "Guarda le foto in grande una dopo l'altra, con lo zoom che resta sullo stesso punto.")
             }
 
             Section("Revisione e sicurezza") {
-                guideRow("checklist", "Revisione", "Ciò che proponi con gli swipe e nelle griglie resta qui finché non confermi. Dalla galleria di un gruppo puoi invece eliminare subito.")
+                guideRow("checklist", "Revisione", "Ciò che proponi con gli swipe resta qui finché non confermi. Dalla galleria di un gruppo, da «Tutti i gruppi» e dalle griglie dopo «Seleziona» puoi invece eliminare subito, con la conferma di iOS.")
+                guideRow("hand.draw", "Scorrere o selezionare", "Nelle griglie un gesto verticale o storto scorre sempre; la selezione parte solo trascinando il dito di lato su una foto.")
                 guideRow("trash", "Eliminati di recente", "Le foto eliminate restano recuperabili per 30 giorni nell'app Foto: lo spazio si libera quando svuoti quell'album. Dopo un'eliminazione «Apri l'app Foto» ti ci porta.")
                 guideRow("lock", "Protezioni", "Preferiti, foto nascoste, album e periodi scelti da te non vengono mai proposti.")
             }
