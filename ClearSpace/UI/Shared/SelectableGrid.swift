@@ -2,21 +2,26 @@ import SwiftUI
 
 /// Riquadro visibile dello scorrimento: non si sposta quando il contenuto scorre.
 private var viewportSpace: NamedCoordinateSpace { NamedCoordinateSpace.named("SelectableGrid.viewport") }
-/// Spazio della griglia: le posizioni del dito vi si confrontano con quelle delle celle.
-private var gridSpace: NamedCoordinateSpace { NamedCoordinateSpace.named("SelectableGrid.grid") }
 
-/// Parte visibile della griglia: altezza del riquadro e spazio occupato dalle barre in alto e in basso.
+/// Parte visibile della griglia: posizione sullo schermo, altezza del riquadro e spazio occupato
+/// dalle barre in alto e in basso.
 private struct VisibleArea: Equatable {
+    /// Bordo superiore del riquadro sullo schermo (coordinate globali).
+    var minY: CGFloat = 0
     var height: CGFloat = 0
     var top: CGFloat = 0
     var bottom: CGFloat = 0
 }
 
 /// Stato del trascinamento che cambia a ogni fotogramma e non deve ridisegnare la griglia:
-/// posizione della griglia nel riquadro, ultimo punto del dito, scorrimento automatico in corso.
+/// posizione della griglia, ultimo punto del dito, scorrimento automatico in corso.
 /// Si usa solo dal thread principale, come la vista che lo possiede.
 private final class GridDragTracker {
     var visible = VisibleArea()
+    /// Angolo in alto a sinistra della griglia sullo schermo (coordinate globali): cambia mentre scorre.
+    var gridOrigin: CGPoint = .zero
+    /// Posizione della griglia al primo movimento del gesto in corso: dice se nel frattempo è scorsa.
+    var gridOriginAtStart: CGPoint?
     /// Inizio della griglia nel riquadro visibile: diventa negativo man mano che si scorre in basso.
     var gridTop: CGFloat = 0
     /// Ultimo punto del dito, nelle coordinate della griglia.
@@ -36,10 +41,12 @@ private final class GridDragTracker {
 /// Griglia con selezione multipla come nell'app Foto.
 ///
 /// - Un tocco seleziona o deseleziona (con la selezione spenta apre l'elemento).
-/// - Trascinando in orizzontale si selezionano tutti gli elementi tra il primo e quello sotto il dito,
-///   anche spostandosi poi in verticale su più righe; se il primo era già selezionato, il gesto deseleziona.
+/// - Un trascinamento che parte chiaramente in orizzontale seleziona tutti gli elementi tra il primo e
+///   quello sotto il dito, anche spostandosi poi in verticale su più righe; se il primo era già
+///   selezionato, il gesto deseleziona.
 /// - Vicino al bordo superiore o inferiore la griglia scorre da sola mentre si trascina.
-/// - Un trascinamento che parte in verticale fa scorrere la griglia come sempre.
+/// - Un trascinamento verticale o in diagonale, oppure con la griglia ancora in movimento, fa sempre
+///   scorrere la griglia: la direzione si misura sullo schermo, una volta sola, all'inizio del gesto.
 struct SelectableGrid<Header: View, Footer: View, Cell: View>: View {
     let items: [IndexedItem]
     @Binding var selection: Set<UUID>
@@ -48,6 +55,10 @@ struct SelectableGrid<Header: View, Footer: View, Cell: View>: View {
     let spacing: CGFloat
     let horizontalPadding: CGFloat
     let onOpen: (IndexedItem) -> Void
+    /// Apre l'elemento a tutto schermo: con VoiceOver è un'azione di ogni cella.
+    let onExpand: ((IndexedItem) -> Void)?
+    /// Chiamata quando compaiono le ultime celle: serve a caricare gli elementi successivi.
+    let onNearEnd: (() -> Void)?
     let header: () -> Header
     let footer: () -> Footer
     let cell: (IndexedItem, Bool) -> Cell
@@ -55,15 +66,12 @@ struct SelectableGrid<Header: View, Footer: View, Cell: View>: View {
     @Environment(AppEnvironment.self) private var env
     @State private var gridWidth: CGFloat = 0
     @State private var painter: DragSelection?
-    @State private var intent: DragIntent = .idle
+    @State private var intent: GridDragIntent = .undecided
     @State private var tracker = GridDragTracker()
     @GestureState private var isDragging = false
 
-    private enum DragIntent {
-        case idle
-        case painting
-        case scrolling
-    }
+    /// Quante celle prima della fine chiedere gli elementi successivi.
+    private static var nearEndMargin: Int { 30 }
 
     init(
         items: [IndexedItem],
@@ -73,6 +81,8 @@ struct SelectableGrid<Header: View, Footer: View, Cell: View>: View {
         spacing: CGFloat = 3,
         horizontalPadding: CGFloat = 12,
         onOpen: @escaping (IndexedItem) -> Void,
+        onExpand: ((IndexedItem) -> Void)? = nil,
+        onNearEnd: (() -> Void)? = nil,
         @ViewBuilder header: @escaping () -> Header,
         @ViewBuilder footer: @escaping () -> Footer,
         @ViewBuilder cell: @escaping (IndexedItem, Bool) -> Cell
@@ -84,6 +94,8 @@ struct SelectableGrid<Header: View, Footer: View, Cell: View>: View {
         self.spacing = spacing
         self.horizontalPadding = horizontalPadding
         self.onOpen = onOpen
+        self.onExpand = onExpand
+        self.onNearEnd = onNearEnd
         self.header = header
         self.footer = footer
         self.cell = cell
@@ -108,6 +120,7 @@ struct SelectableGrid<Header: View, Footer: View, Cell: View>: View {
             .coordinateSpace(viewportSpace)
             .onGeometryChange(for: VisibleArea.self) { geometry in
                 VisibleArea(
+                    minY: geometry.frame(in: .global).minY,
                     height: geometry.size.height,
                     top: geometry.safeAreaInsets.top,
                     bottom: geometry.safeAreaInsets.bottom
@@ -122,7 +135,7 @@ struct SelectableGrid<Header: View, Footer: View, Cell: View>: View {
             }
         }
         .onDisappear {
-            tracker.stopAutoScroll()
+            endDrag()
         }
     }
 
@@ -130,6 +143,7 @@ struct SelectableGrid<Header: View, Footer: View, Cell: View>: View {
 
     private func grid(proxy: ScrollViewProxy) -> some View {
         let columns = Array(repeating: GridItem(.flexible(), spacing: spacing), count: metrics.columns)
+        let count = items.count
         return LazyVGrid(columns: columns, spacing: spacing) {
             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                 Color.clear
@@ -148,6 +162,18 @@ struct SelectableGrid<Header: View, Footer: View, Cell: View>: View {
                     .accessibilityAction {
                         tap(item)
                     }
+                    .accessibilityActions {
+                        if let onExpand {
+                            Button("Apri a tutto schermo") {
+                                onExpand(item)
+                            }
+                        }
+                    }
+                    .onAppear {
+                        if index >= count - Self.nearEndMargin {
+                            onNearEnd?()
+                        }
+                    }
                     .id(item.id)
             }
         }
@@ -161,9 +187,12 @@ struct SelectableGrid<Header: View, Footer: View, Cell: View>: View {
         } action: { top in
             tracker.gridTop = top
         }
+        .onGeometryChange(for: CGPoint.self) { geometry in
+            geometry.frame(in: .global).origin
+        } action: { origin in
+            tracker.gridOrigin = origin
+        }
         .simultaneousGesture(dragGesture(proxy: proxy), including: isSelecting ? .all : .subviews)
-        // Per ultimo: lo spazio con nome deve racchiudere il gesto, che vi misura la posizione del dito.
-        .coordinateSpace(gridSpace)
     }
 
     private func tap(_ item: IndexedItem) {
@@ -181,7 +210,8 @@ struct SelectableGrid<Header: View, Footer: View, Cell: View>: View {
     // MARK: - Selezione con trascinamento
 
     private func dragGesture(proxy: ScrollViewProxy) -> some Gesture {
-        DragGesture(minimumDistance: 8, coordinateSpace: gridSpace)
+        // Coordinate dello schermo: la direzione del dito non deve dipendere da quanto scorre la griglia.
+        DragGesture(minimumDistance: 8, coordinateSpace: .global)
             .updating($isDragging) { _, state, _ in
                 state = true
             }
@@ -195,32 +225,46 @@ struct SelectableGrid<Header: View, Footer: View, Cell: View>: View {
         switch intent {
         case .scrolling:
             return
-        case .idle:
-            // Come nell'app Foto: si seleziona solo se il gesto parte chiaramente in orizzontale.
-            // Uno che parte in verticale o in diagonale resta uno scorrimento, così la griglia
-            // scorre sempre quando si vuole scorrerla.
-            let horizontal = abs(value.translation.width)
-            let vertical = abs(value.translation.height)
-            // Prima di decidere serve un movimento abbastanza ampio da capirne la direzione.
-            guard max(horizontal, vertical) >= 12 else { return }
-            guard horizontal > vertical * 2,
-                  let start = metrics.index(at: value.startLocation, count: items.count),
-                  let next = DragSelection(anchor: start, ids: items.map { $0.id }, current: selection) else {
+        case .undecided:
+            if tracker.gridOriginAtStart == nil {
+                tracker.gridOriginAtStart = tracker.gridOrigin
+            }
+            let startY = tracker.gridOriginAtStart?.y ?? tracker.gridOrigin.y
+            let decision = GridDragIntent.decide(
+                screenTranslation: value.translation,
+                contentMoved: tracker.gridOrigin.y - startY
+            )
+            switch decision {
+            case .undecided:
+                return
+            case .scrolling:
                 intent = .scrolling
                 return
+            case .painting:
+                guard let start = metrics.index(at: gridPoint(value.startLocation), count: items.count),
+                      let next = DragSelection(anchor: start, ids: items.map { $0.id }, current: selection) else {
+                    intent = .scrolling
+                    return
+                }
+                intent = .painting
+                painter = next
+                active = next
+                env.recordTutorial(.dragSelect)
             }
-            intent = .painting
-            painter = next
-            active = next
-            env.recordTutorial(.dragSelect)
         case .painting:
             break
         }
         guard let active else { return }
-        tracker.finger = value.location
-        tracker.fingerInViewport = tracker.gridTop + value.location.y
-        paint(at: value.location, with: active)
+        let point = gridPoint(value.location)
+        tracker.finger = point
+        tracker.fingerInViewport = value.location.y - tracker.visible.minY
+        paint(at: point, with: active)
         updateAutoScroll(proxy: proxy, painter: active)
+    }
+
+    /// Punto dello schermo nelle coordinate della griglia, che si sposta mentre scorre.
+    private func gridPoint(_ screenPoint: CGPoint) -> CGPoint {
+        CGPoint(x: screenPoint.x - tracker.gridOrigin.x, y: screenPoint.y - tracker.gridOrigin.y)
     }
 
     private func paint(at location: CGPoint, with painter: DragSelection) {
@@ -232,8 +276,9 @@ struct SelectableGrid<Header: View, Footer: View, Cell: View>: View {
     }
 
     private func endDrag() {
-        intent = .idle
+        intent = .undecided
         painter = nil
+        tracker.gridOriginAtStart = nil
         tracker.finger = nil
         tracker.fingerInViewport = nil
         tracker.stopAutoScroll()

@@ -305,6 +305,40 @@ final class AppEnvironment {
         }
     }
 
+    /// Elimina subito gli elementi indicati, già proposti per l'eliminazione: è «Elimina» nella galleria
+    /// di un gruppo. Passa dal motore di sicurezza come la Revisione (ricontrollo di ogni elemento,
+    /// conferma di iOS, esito registrato nei Risultati), con un piano limitato a questi elementi.
+    /// La conferma è quella data dall'utente nella galleria, che mostra quanti elementi, quanto spazio,
+    /// gli effetti su iCloud e gli eventuali contenuti importanti.
+    /// - Returns: l'esito, oppure `nil` se nessuno degli elementi può essere eliminato.
+    func deleteNow(_ ids: [UUID]) async -> CleanupReport? {
+        guard !ids.isEmpty else { return nil }
+        // Un'analisi in corso potrebbe reinserire nell'indice elementi appena eliminati: prima la si ferma
+        // e la si riprende più avanti.
+        var interruptedScan = false
+        if scan.isRunning {
+            scan.cancel()
+            interruptedScan = true
+            for _ in 0..<30 where scan.isRunning {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+        }
+        let plan = await safety.makePlan(only: Set(ids))
+        guard !plan.isEmpty else { return nil }
+        let confirmation = DeletionConfirmation(
+            planID: plan.id,
+            confirmedAt: Date(),
+            acknowledgedICloudEffects: true,
+            acknowledgedSensitiveItems: true,
+            allowPermanentFileDeletion: false
+        )
+        let report = await safety.execute(plan, confirmation: confirmation)
+        if interruptedScan {
+            scan.noteLibraryChanged()
+        }
+        return report
+    }
+
     /// Revoca l'accesso a una cartella e toglie i suoi elementi dall'indice. I file non vengono toccati.
     func removeFolder(_ id: UUID) {
         store.removeMissing(inFolder: id, keeping: [])

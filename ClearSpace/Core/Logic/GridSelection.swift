@@ -62,6 +62,37 @@ struct GridMetrics: Equatable, Sendable {
     }
 }
 
+/// Che cosa diventa un trascinamento del dito sulla griglia: selezione o scorrimento.
+///
+/// Lo spostamento va misurato sullo schermo e non sulla griglia: mentre la griglia scorre si muove
+/// insieme al dito, e misurato su di essa ogni scorrimento sembrerebbe quasi fermo in verticale, così
+/// basterebbe una piccola deviazione laterale del pollice per far partire la selezione.
+enum GridDragIntent: Equatable, Sendable {
+    case undecided
+    case painting
+    case scrolling
+
+    /// Movimento del dito, in punti sullo schermo, prima di decidere.
+    static let decisionDistance: CGFloat = 12
+    /// Oltre questo spostamento del contenuto la griglia sta già scorrendo.
+    static let movingContentTolerance: CGFloat = 10
+
+    /// Decide una volta sola, nei primi millimetri del gesto. Si seleziona soltanto con un gesto
+    /// chiaramente orizzontale e con la griglia ferma; in tutti gli altri casi si scorre.
+    /// - Parameters:
+    ///   - screenTranslation: spostamento del dito sullo schermo dall'inizio del gesto.
+    ///   - contentMoved: di quanto si è spostata la griglia sullo schermo dall'inizio del gesto.
+    static func decide(screenTranslation: CGSize, contentMoved: CGFloat) -> GridDragIntent {
+        let horizontal = abs(screenTranslation.width)
+        let vertical = abs(screenTranslation.height)
+        guard max(horizontal, vertical) >= decisionDistance else { return .undecided }
+        if abs(contentMoved) > movingContentTolerance {
+            return .scrolling
+        }
+        return horizontal > vertical * 2 ? .painting : .scrolling
+    }
+}
+
 /// Selezione con trascinamento, come nell'app Foto: si parte da un elemento e tutti quelli tra il
 /// primo e quello sotto il dito prendono lo stato opposto a quello iniziale del primo (se era
 /// selezionato si deseleziona, altrimenti si seleziona). Tornando indietro con il dito, gli elementi

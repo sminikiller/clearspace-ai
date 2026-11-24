@@ -77,7 +77,13 @@ struct GroupComparisonView: View {
         }
         .sheet(isPresented: $showsGallery) {
             NavigationStack {
-                GroupSelectionView(groupID: groupID, closesAfterDecision: true, opensComparison: false)
+                // Aperta dallo swipe la galleria segue le regole della sessione: le scelte passano dalla Revisione.
+                GroupSelectionView(
+                    groupID: groupID,
+                    closesAfterDecision: true,
+                    opensComparison: false,
+                    deletesDirectly: !closesAfterDecision
+                )
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
                             Button("Chiudi") {
@@ -179,9 +185,13 @@ struct GroupComparisonView: View {
         group: ItemGroup,
         members: [IndexedItem]
     ) -> some View {
-        CompareViewer(item: selected, viewport: $viewport) { offset in
-            step(offset, from: selected, in: members)
-        }
+        let index = members.firstIndex(where: { $0.id == selected.id }) ?? 0
+        return CompareViewer(
+            item: selected,
+            viewport: $viewport,
+            canStep: { offset in members.indices.contains(index + offset) },
+            onStep: { offset in step(offset, from: selected, in: members) }
+        )
         .overlay(alignment: .topLeading) {
             HStack(spacing: 6) {
                 viewerTag("\(position) di \(members.count)", systemImage: nil, tint: .black.opacity(0.6))
@@ -523,17 +533,30 @@ struct GroupComparisonView: View {
     }
 }
 
-/// Foto grande del confronto. Pizzico e doppio tocco ingrandiscono; con lo zoom attivo il
-/// trascinamento sposta l'immagine, senza zoom lo scorrimento orizzontale passa allo scatto vicino.
+/// Foto grande del confronto. Pizzico e doppio tocco ingrandiscono. Senza zoom la foto segue il dito
+/// e, lasciandola oltre un quarto di strada (o con un colpo deciso), passa allo scatto vicino, come
+/// nell'app Foto. Con lo zoom attivo il trascinamento sposta l'immagine; continuando oltre il bordo
+/// dell'immagine ingrandita si passa allo scatto vicino, sullo stesso punto.
 struct CompareViewer: View {
     let item: IndexedItem
     @Binding var viewport: CompareViewport
+    /// Dice se esiste uno scatto nella direzione indicata (+1 successivo, −1 precedente).
+    var canStep: (Int) -> Bool
     /// Richiesta di passare allo scatto successivo (+1) o precedente (−1).
     var onStep: (Int) -> Void
 
-    init(item: IndexedItem, viewport: Binding<CompareViewport>, onStep: @escaping (Int) -> Void = { _ in }) {
+    /// Spostamento orizzontale della foto mentre il dito la trascina verso quella vicina.
+    @State private var dragShift: CGFloat = 0
+
+    init(
+        item: IndexedItem,
+        viewport: Binding<CompareViewport>,
+        canStep: @escaping (Int) -> Bool = { _ in true },
+        onStep: @escaping (Int) -> Void = { _ in }
+    ) {
         self.item = item
         self._viewport = viewport
+        self.canStep = canStep
         self.onStep = onStep
     }
 
@@ -562,6 +585,7 @@ struct CompareViewer: View {
                             .offset(viewport.offset)
                     }
                 }
+                .offset(x: dragShift)
                 .frame(width: geometry.size.width, height: geometry.size.height)
                 .background(Color.black)
                 .contentShape(Rectangle())
@@ -596,23 +620,57 @@ struct CompareViewer: View {
     private func dragGesture(in size: CGSize) -> some Gesture {
         DragGesture(minimumDistance: 10)
             .onChanged { value in
-                guard viewport.isZoomed else { return }
-                let proposed = CGSize(
-                    width: viewport.anchorOffset.width + value.translation.width,
-                    height: viewport.anchorOffset.height + value.translation.height
-                )
-                viewport.offset = Self.clamp(proposed, scale: viewport.scale, in: size)
+                if viewport.isZoomed {
+                    let proposed = CGSize(
+                        width: viewport.anchorOffset.width + value.translation.width,
+                        height: viewport.anchorOffset.height + value.translation.height
+                    )
+                    let clamped = Self.clamp(proposed, scale: viewport.scale, in: size)
+                    viewport.offset = clamped
+                    // Oltre il bordo dell'immagine ingrandita il dito tira verso la foto vicina.
+                    dragShift = resisted((proposed.width - clamped.width) * 0.6)
+                } else if abs(value.translation.width) > abs(value.translation.height) {
+                    dragShift = resisted(value.translation.width)
+                }
             }
             .onEnded { value in
                 if viewport.isZoomed {
                     viewport.anchorOffset = viewport.offset
-                    return
                 }
-                let horizontal = value.translation.width
-                if abs(horizontal) > 50 && abs(horizontal) > abs(value.translation.height) {
-                    onStep(horizontal < 0 ? 1 : -1)
+                let shift = dragShift
+                let isHorizontal = abs(value.translation.width) > abs(value.translation.height)
+                let flick = isHorizontal && abs(value.predictedEndTranslation.width) > size.width * 0.6
+                let threshold = viewport.isZoomed ? 40 : min(90, size.width * 0.22)
+                let direction = shift < 0 ? 1 : -1
+                if shift != 0 && (abs(shift) > threshold || (!viewport.isZoomed && flick)) && canStep(direction) {
+                    slide(direction, width: size.width)
+                } else {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        dragShift = 0
+                    }
                 }
             }
+    }
+
+    /// Senza una foto vicina in quella direzione lo spostamento si smorza, come a fine elenco in Foto.
+    private func resisted(_ shift: CGFloat) -> CGFloat {
+        let direction = shift < 0 ? 1 : -1
+        return canStep(direction) ? shift : shift * 0.25
+    }
+
+    /// La foto esce dal lato del dito ed entra quella vicina dal lato opposto.
+    private func slide(_ direction: Int, width: CGFloat) {
+        withAnimation(.easeIn(duration: 0.12)) {
+            dragShift = direction > 0 ? -width : width
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(120))
+            onStep(direction)
+            dragShift = direction > 0 ? width * 0.3 : -width * 0.3
+            withAnimation(.easeOut(duration: 0.18)) {
+                dragShift = 0
+            }
+        }
     }
 
     private func toggleZoom() {

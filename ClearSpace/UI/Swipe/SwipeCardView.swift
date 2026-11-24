@@ -36,6 +36,16 @@ struct SwipeCardView: View {
     private var media: some View {
         Color.black
             .overlay {
+                // Dietro la foto intera la stessa foto, sfocata: niente bande nere sopra e sotto
+                // (o ai lati) quando la forma della foto è diversa da quella della carta.
+                if isInteractive && item.isImage {
+                    ItemThumbnailView(item: item, pointSide: 120)
+                        .blur(radius: 24)
+                        .opacity(0.55)
+                        .accessibilityHidden(true)
+                }
+            }
+            .overlay {
                 mediaContent
             }
             .clipped()

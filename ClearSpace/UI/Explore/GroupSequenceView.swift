@@ -1,21 +1,31 @@
 import SwiftUI
 
+/// Esito di una scelta su un intero gruppo.
+struct GroupDecision {
+    let message: String
+    /// Elementi eliminati subito; 0 se la scelta è passata dalla Revisione o ha tenuto tutto.
+    var deletedCount = 0
+    /// Spazio che gli elementi eliminati occupano ancora sull'iPhone finché resta pieno
+    /// «Eliminati di recente».
+    var freedBytes: Int64 = 0
+}
+
 /// Passaggio da un gruppo al successivo nella revisione gruppo per gruppo.
 struct GroupSequenceControl {
     /// Posizione del gruppo mostrato, da 1.
     let position: Int
     let total: Int
-    /// Il gruppo è stato deciso per intero («Tieni solo la migliore», «Tieni tutte»): si passa al
-    /// successivo mostrando il messaggio ricevuto.
-    let onDecided: (String) -> Void
+    /// Il gruppo è stato deciso per intero («Elimina», «Tieni tutte»): si passa al successivo
+    /// mostrando il messaggio ricevuto.
+    let onDecided: (GroupDecision) -> Void
     /// L'utente salta il gruppo, oppure va avanti dopo averlo deciso foto per foto.
     let onNext: () -> Void
 }
 
 /// Revisione dei gruppi uno dopo l'altro, come un mazzo di carte: si apre la galleria del primo gruppo
 /// da decidere e, dopo una scelta su tutto il gruppo, si passa da soli al successivo. «Salta» lo lascia
-/// da decidere. Prima vengono i gruppi che liberano più spazio. Come ovunque nell'app, nulla viene
-/// eliminato: le foto scartate passano alla Revisione.
+/// da decidere. Prima vengono i gruppi che liberano più spazio. Le foto scartate con «Elimina» vanno
+/// in «Eliminati di recente» (con la conferma di iOS), quelle aggiunte alla Revisione restano là.
 struct GroupSequenceView: View {
     let collection: SmartCollection
 
@@ -26,6 +36,8 @@ struct GroupSequenceView: View {
     @State private var position = 0
     @State private var decidedCount = 0
     @State private var skippedCount = 0
+    @State private var deletedCount = 0
+    @State private var freedBytes: Int64 = 0
     @State private var toast: String?
 
     var body: some View {
@@ -50,9 +62,11 @@ struct GroupSequenceView: View {
                     sequence: GroupSequenceControl(
                         position: position + 1,
                         total: queue.count,
-                        onDecided: { message in
+                        onDecided: { decision in
                             decidedCount += 1
-                            toast = message
+                            deletedCount += decision.deletedCount
+                            freedBytes += decision.freedBytes
+                            toast = decision.message
                             advance()
                         },
                         onNext: {
@@ -98,13 +112,20 @@ struct GroupSequenceView: View {
                         .font(.headline)
                         .foregroundStyle(.secondary)
                 }
-                Text(env.store.markedCount > 0
-                     ? "Gli elementi che hai scartato sono nella scheda Revisione: nulla è stato eliminato. I gruppi saltati restano da decidere."
-                     : "Nulla è stato eliminato. I gruppi saltati restano da decidere e li ritrovi nell'elenco.")
+                if deletedCount > 0 {
+                    Text("Eliminati: \(deletedCount) · \(Format.bytes(freedBytes))")
+                        .font(.headline)
+                        .foregroundStyle(Theme.keep)
+                }
+                Text(completionMessage)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
+
+                if deletedCount > 0 {
+                    RecentlyDeletedCard(count: deletedCount, deviceBytes: freedBytes)
+                }
 
                 VStack(spacing: 10) {
                     if env.store.markedCount > 0 {
@@ -133,6 +154,20 @@ struct GroupSequenceView: View {
         .background(Theme.background)
         .navigationTitle("Gruppi")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var completionMessage: String {
+        var parts: [String] = []
+        if deletedCount > 0 {
+            parts.append("Le foto eliminate restano 30 giorni in «Eliminati di recente» dell'app Foto: svuotalo per liberare subito lo spazio.")
+        }
+        if env.store.markedCount > 0 {
+            parts.append("Gli elementi aggiunti alla Revisione aspettano la tua conferma.")
+        }
+        parts.append(deletedCount == 0 && env.store.markedCount == 0
+                     ? "Nulla è stato eliminato. I gruppi saltati restano da decidere e li ritrovi nell'elenco."
+                     : "I gruppi saltati restano da decidere.")
+        return parts.joined(separator: " ")
     }
 
     // MARK: - Avanzamento

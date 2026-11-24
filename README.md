@@ -15,12 +15,12 @@ Il codice è stato scritto su Windows, dove Xcode non esiste. Compilazione, test
 Verificato a ogni modifica del codice (ultimo esito: tutto superato):
 
 - compilazione di app e test senza errori;
-- test unitari sulla logica: regole di sicurezza, piano di eliminazione, sessioni e scelte di gruppo, ricerca, analisi, scelta dello scatto migliore, selezione nella griglia e stelle, pianificazione, formati;
+- test unitari sulla logica: regole di sicurezza, piano di eliminazione, sessioni e scelte di gruppo, proposta della galleria di un gruppo, ricerca, analisi, scelta dello scatto migliore, selezione nella griglia (con la regola che distingue lo scorrimento dalla selezione) e stelle, pianificazione, formati;
 - prova d'uso automatica sul simulatore, con una schermata salvata a ogni passo:
   - introduzione, permesso per Foto, analisi completa fino al termine, swipe e pulsanti, annullamento, dettagli, revisione, conferma, eliminazione reale di due foto di prova ed esito;
   - foto simili: il workflow aggiunge al simulatore tre scatti della stessa scena (nitido, sfocato, scuro) e l'app deve riconoscerli come gruppo e consigliare quello nitido; nello swipe deve comparire la striscia con tutti gli scatti, «Tieni la migliore» deve chiudere il gruppo e un solo annullamento deve ripristinarlo;
   - un gruppo dopo l'altro: dall'elenco dei gruppi si apre il primo gruppo da decidere con «Gruppo 1 di N» nel titolo; «Salta» porta al riepilogo finale e «Torna all'elenco» riporta indietro senza cambiare nulla;
-  - griglia del gruppo: trascinando il dito sulla prima riga si selezionano le tre foto, i tocchi deselezionano, la stella resta sulla foto scelta e si ritrova in Esplora, «Tieni solo la tua migliore» chiude il gruppo; nel confronto i pulsanti stanno sopra il bordo inferiore e il contatore sotto la barra del titolo; nella griglia di una categoria «Seleziona» e un trascinamento selezionano tre elementi;
+  - galleria del gruppo: all'apertura la consigliata resta e le altre due sono da eliminare; trascinando il dito sulla prima riga cambiano tutte e tre, i tocchi le rimettono, la stella (dal menu della foto) si ritrova in Esplora e nello swipe «Scarta» chiude il gruppo passando dalla Revisione; in Esplora due scorrimenti storti come quelli di un pollice non devono cambiare nessuna scelta e «Elimina» deve chiedere conferma: annullando l'avviso di iOS tutto resta com'era; nel confronto i pulsanti stanno sopra il bordo inferiore e il contatore sotto la barra del titolo; nella griglia di una categoria a tutto schermo lo scorrimento di lato porta alla foto vicina, e «Seleziona» con un trascinamento seleziona tre elementi;
   - video: un video di prova deve riprodursi dentro la carta e mettersi in pausa con un tocco; con due riprese quasi uguali, toccando l'altra nella striscia deve passare sulla carta e partire, e «Tieni solo questo» deve chiudere il gruppo;
   - un giro di tutte le altre schermate;
   - un secondo giro di tutte le schermate con il testo ingrandito (Accessibilità, dimensione AX1) e il tema scuro: per ogni schermata si controlla in automatico che nessun testo o pulsante esca dallo schermo e che i pulsanti principali si possano raggiungere, e si salva un'immagine.
@@ -127,7 +127,7 @@ ClearSpaceTests/             test unitari sulla logica
 ClearSpaceUITests/           prova d'uso automatica sul simulatore
 ```
 
-95 file Swift per l'app (circa 24.300 righe), 9 file di test unitari e 3 per la prova d'uso e il giro con il testo grande.
+95 file Swift per l'app (circa 25.000 righe), 11 file di test unitari e 3 per la prova d'uso e il giro con il testo grande.
 
 ## Architettura
 
@@ -143,10 +143,11 @@ ClearSpaceUITests/           prova d'uso automatica sul simulatore
 
 ### Il flusso di eliminazione
 
-1. **Selezione.** Uno swipe a sinistra (o il pulsante equivalente) cambia soltanto lo stato dell'elemento in "in attesa di eliminazione". Nessun file viene toccato.
+1. **Selezione.** Uno swipe a sinistra (o il pulsante equivalente) cambia soltanto lo stato dell'elemento in "in attesa di eliminazione". Nessun file viene toccato. Nella galleria di un gruppo i tocchi cambiano solo la scelta mostrata, che non viene salvata finché non si conferma.
 2. **Revisione.** La scheda Revisione mostra tutto ciò che è stato selezionato; si può ripristinare un elemento, un gruppo o tutto.
 3. **Conferma.** `PlanBuilder` prepara l'elenco con gli effetti distinti su iPhone e iCloud. L'utente deve confermare, e dichiarare di aver compreso gli effetti su iCloud e di aver controllato i contenuti sensibili quando presenti.
 4. **Esecuzione.** Solo `SafetyEngine.execute` può eliminare, e solo con una conferma valida per quel piano. Ricontrolla ogni elemento, esegue, verifica l'esito e registra ciò che è realmente avvenuto: eliminato, non riuscito o in attesa.
+   Scorciatoia: nella galleria di un gruppo «Elimina N» fa gli stessi passi 3 e 4 per le sole foto scartate di quel gruppo (`SafetyEngine.makePlan(only:)` e `AppEnvironment.deleteNow`). La conferma mostra quante foto, lo spazio, gli effetti su iCloud e gli eventuali contenuti importanti; poi iOS chiede la sua. Se si annulla l'avviso di iOS gli elementi tornano allo stato di prima.
 5. **Eliminati di recente.** Foto e video vanno in Eliminati di recente e occupano spazio per altri 30 giorni. iOS non permette alle app di svuotare quell'album: l'esito e, per 30 giorni, la scheda Risultati spiegano come farlo e aprono l'app Foto.
 
 Finché qualcosa aspetta la conferma, la Home mostra la scheda «Pronto da liberare» con il numero di elementi, lo spazio e il collegamento alla Revisione.
@@ -157,15 +158,16 @@ Gli elementi protetti (preferiti, foto nascoste, album, cartelle e periodi scelt
 
 Quando una foto ha degli scatti simili, l'app li mostra tutti: nella modalità swipe compare una striscia con l'intero gruppo, la griglia li mette tutti insieme in miniatura e il confronto li apre in grande uno dopo l'altro.
 
-- **Griglia con selezione rapida.** Come nell'app Foto: un tocco seleziona, trascinando il dito in orizzontale si selezionano tutte le anteprime toccate (anche su più righe, con lo scorrimento automatico vicino ai bordi), partendo da una già selezionata si deseleziona. Tenendo premuta un'anteprima la si vede in grande. Scelte rapide: tutte, tutte tranne le migliori, nessuna. La stessa selezione a trascinamento c'è nelle griglie delle categorie, dopo «Seleziona».
-- **Le tue migliori.** Si possono segnare una o più foto con una stella: restano conservate e la stella si vede ovunque (striscia, carta, confronto, griglie). Le stelle prevalgono sul consiglio dell'app: «Tieni solo le tue migliori» conserva quelle con la stella e propone le altre. Il consiglio dell'app è indicato a parte, con le scintille.
+- **Galleria del gruppo.** All'apertura la migliore (la stella dell'utente o la consigliata) è da tenere e le altre da eliminare; ogni anteprima ha un solo segno: verde resta, cestino si elimina, lucchetto protetta. Un tocco cambia la scelta, trascinando il dito in orizzontale cambiano tutte le anteprime toccate (anche su più righe, con lo scorrimento automatico vicino ai bordi). «Elimina N · X MB» elimina subito le scartate, «Tieni tutte» conserva il gruppo; il menu «…» ha «Aggiungi alla Revisione», le scelte rapide, l'ordine e le stelle. Le frecce su un'anteprima la aprono a tutto schermo, dove si scorre tra le foto del gruppo. Aperta dallo swipe la galleria segue le regole della sessione: «Scarta N» manda le foto alla Revisione.
+- **Scorrere o selezionare.** Nelle griglie la direzione del dito si misura sullo schermo e si decide una volta sola, nei primi millimetri: si seleziona solo con un gesto chiaramente orizzontale e con la griglia ferma; qualsiasi gesto verticale o in diagonale, o con la griglia ancora in movimento, la fa scorrere (`GridDragIntent` in `Core/Logic/GridSelection.swift`). Misurata sulla griglia, che si muove insieme al dito, la direzione faceva partire la selezione a ogni piccola deviazione del pollice. La stessa selezione a trascinamento c'è nelle griglie delle categorie, dopo «Seleziona»; le griglie lunghe caricano da sole gli elementi successivi.
+- **Le tue migliori.** Si possono segnare una o più foto con una stella: restano conservate e la stella si vede ovunque (striscia, carta, confronto, griglie). Le stelle prevalgono sul consiglio dell'app: nella galleria sono le foto che restano, nello swipe e nel confronto «Tieni solo le tue migliori» conserva quelle con la stella e propone le altre. Il consiglio dell'app è indicato a parte, con le scintille.
 
 - **Raggruppamento.** Raffiche (riconosciute da iOS) e scatti ravvicinati nel tempo, confrontati con le impronte visive di Vision. Se Vision non riesce a produrre l'impronta si ripiega sull'hash percettivo delle anteprime.
 - **Criteri.** Per ogni membro di un gruppo `ShotAnalyzer` misura: nitidezza dell'intera immagine, nitidezza del soggetto (il volto più grande, altrimenti il centro), qualità dei volti secondo Vision, occhi chiusi e sorrisi, giudizio estetico dove iOS lo mette a disposizione. A questi si aggiungono esposizione e risoluzione.
 - **Confronto corretto.** Un criterio viene usato solo se è disponibile per tutti gli scatti del gruppo: non si paragonano numeri calcolati in modo diverso. Preferiti e foto modificate prevalgono sempre, perché sono scelte già fatte dall'utente.
-- **Spiegazione.** Il consiglio arriva con il motivo («ha gli occhi aperti e il soggetto più a fuoco») e ogni scatto ha un voto da 0 a 100. Nel confronto lo zoom è condiviso: ingrandito un punto, si passa da una foto all'altra restando lì.
-- **Scelta.** «Tieni solo la migliore», «Tieni solo questa» oppure «Tieni tutte». Gli scatti scartati passano alla Revisione come ogni altra scelta, e la mossa si annulla con un solo gesto.
-- **Un gruppo dopo l'altro.** Dalla Home («Scegli le foto migliori») o in cima all'elenco dei gruppi si aprono i gruppi da decidere uno dopo l'altro, a partire da quello che libera più spazio: «Gruppo 3 di 12» nel titolo, la galleria del gruppo e, dopo «Tieni solo la migliore» o «Tieni tutte», il gruppo successivo. «Salta» lo lascia da decidere; alla fine un riepilogo porta alla Revisione. Nell'elenco i gruppi già decisi vanno in fondo con l'etichetta «Deciso». La logica (cosa è deciso, ordine, gruppi spariti) è in `Core/Logic/GroupReview.swift`.
+- **Spiegazione.** Il consiglio arriva con il motivo («ha gli occhi aperti e il soggetto più a fuoco») e ogni scatto ha un voto da 0 a 100. Nel confronto la foto segue il dito e passa alla vicina come in Foto; lo zoom è condiviso: ingrandito un punto, si passa da una foto all'altra restando lì (continuando a trascinare oltre il bordo dell'immagine ingrandita).
+- **Scelta.** Nello swipe e nel confronto: «Tieni solo la migliore», «Tieni solo questa» oppure «Tieni tutte»; gli scatti scartati passano alla Revisione e nello swipe la mossa si annulla con un solo gesto. Nella galleria: «Elimina N» (subito, con la conferma di iOS) o «Aggiungi alla Revisione».
+- **Un gruppo dopo l'altro.** Dalla Home («Scegli le foto migliori») o in cima all'elenco dei gruppi si aprono i gruppi da decidere uno dopo l'altro, a partire da quello che libera più spazio: «Gruppo 3 di 12» nel titolo, la galleria del gruppo e, dopo «Elimina» o «Tieni tutte», il gruppo successivo. «Salta» lo lascia da decidere; alla fine un riepilogo dice quante foto sono state eliminate e come svuotare «Eliminati di recente». Nell'elenco i gruppi già decisi vanno in fondo con l'etichetta «Deciso». La logica (cosa è deciso, ordine, gruppi spariti) è in `Core/Logic/GroupReview.swift`.
 - **Sensibilità.** In Impostazioni → Foto simili si sceglie quanto devono somigliarsi due scatti: Rigorosa, Normale o Ampia cambiano insieme distanza tra impronte visive, finestra di tempo e distanza delle impronte percettive. Cambiandola, l'app azzera il controllo di somiglianza delle foto e ricalcola i gruppi con un'analisi rapida; decisioni e stelle restano.
 - **Uno per uno.** Vale per le foto e per i video simili: un tocco su un'anteprima della striscia porta quell'elemento sulla carta, dove lo si guarda (un video parte subito) e lo si decide con i soliti gesti. Si può tornare anche su un elemento già deciso e cambiare idea. Tenendo premuta un'anteprima lo si conserva o scarta senza spostarsi.
 
@@ -255,7 +257,7 @@ Le analisi pesanti (anteprime, impronte visive dei gruppi, misure degli scatti s
 
 ## Test
 
-`ClearSpaceTests` contiene oltre 130 test sulla logica pura: regole di sicurezza e conferma, piano di eliminazione, sessioni e annullamento, ricerca in linguaggio naturale, confronto dei testi, misure sulle immagini, punteggio di recuperabilità, pianificazione delle code, riepilogo e rilevamento dei viaggi, revisione gruppo per gruppo, sensibilità delle foto simili, promemoria di Eliminati di recente e calcolo in parallelo.
+`ClearSpaceTests` contiene oltre 140 test sulla logica pura: regole di sicurezza e conferma, piano di eliminazione, sessioni e annullamento, ricerca in linguaggio naturale, confronto dei testi, misure sulle immagini, punteggio di recuperabilità, pianificazione delle code, riepilogo e rilevamento dei viaggi, revisione gruppo per gruppo, sensibilità delle foto simili, promemoria di Eliminati di recente e calcolo in parallelo.
 
 Si eseguono da Xcode con Prodotto → Test, oppure con il workflow di GitHub.
 

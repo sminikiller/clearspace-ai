@@ -47,10 +47,15 @@ extension IndexedItem {
     var usesMasculineWording: Bool { !isImage }
 }
 
-/// Galleria di un gruppo di simili o duplicati: tutte le anteprime in griglia, con selezione multipla
-/// a tocchi o trascinando il dito come nell'app Foto. Le migliori si segnano con una stella: restano
-/// conservate e si riconoscono ovunque nell'app. Ogni scelta passa dalla revisione: da qui non si
-/// elimina nulla.
+/// Galleria di un gruppo di simili o duplicati, la schermata in cui si decide il gruppo.
+///
+/// - All'apertura la migliore (la stella dell'utente o la consigliata) è da tenere, le altre sono
+///   da eliminare. Un tocco cambia la scelta di una foto; trascinando il dito in orizzontale si
+///   cambiano tante foto insieme, come nella selezione dell'app Foto.
+/// - «Elimina» elimina subito le foto scartate: ClearSpace chiede una conferma e iOS un'altra, poi
+///   le foto restano 30 giorni in «Eliminati di recente». Aperta dallo swipe, invece, la galleria
+///   segue le regole della sessione e le foto scartate passano alla Revisione.
+/// - Le scelte fatte con i tocchi non vengono salvate finché non si conferma.
 struct GroupSelectionView: View {
     let groupID: UUID
     /// Chiude la galleria dopo una scelta che decide tutto il gruppo (usato dalla modalità swipe).
@@ -60,14 +65,22 @@ struct GroupSelectionView: View {
     /// La galleria fa parte della revisione gruppo per gruppo: dopo una scelta su tutto il gruppo si
     /// passa al successivo invece di restare qui.
     var sequence: GroupSequenceControl?
+    /// Elimina subito le foto scartate. Spento nello swipe, dove ogni scelta passa dalla Revisione.
+    var deletesDirectly = true
 
     @Environment(AppEnvironment.self) private var env
     @Environment(\.dismiss) private var dismiss
-    @State private var selection = Set<UUID>()
+    /// Scelte fatte a mano rispetto alla proposta: `true` = elimina, `false` = tieni.
+    @State private var overrides: [UUID: Bool] = [:]
     @State private var order: Order = .shot
     @State private var comparison: ComparisonStart?
-    @State private var previewItem: IndexedItem?
+    /// Stato degli elementi quando si è aperto il confronto: al ritorno le scelte fatte là prevalgono.
+    @State private var statusesBeforeComparison: [UUID: ReviewStatus] = [:]
+    @State private var preview: PreviewStart?
     @State private var toast: String?
+    @State private var confirmsDeletion = false
+    @State private var isDeleting = false
+    @State private var outcome: GroupDecision?
 
     enum Order: String, CaseIterable, Identifiable {
         case shot
@@ -88,6 +101,21 @@ struct GroupSelectionView: View {
         let itemID: UUID
 
         var id: UUID { itemID }
+    }
+
+    /// Foto da aprire a tutto schermo e quelle tra cui scorrere.
+    struct PreviewStart: Identifiable {
+        let itemID: UUID
+        let itemIDs: [UUID]
+
+        var id: UUID { itemID }
+    }
+
+    /// Scelta in corso: cosa eliminare, cosa non si può eliminare e la proposta di partenza.
+    private struct Choice {
+        let proposal: Set<UUID>
+        let locked: Set<UUID>
+        let deletion: Set<UUID>
     }
 
     private var group: ItemGroup? {
@@ -120,11 +148,23 @@ struct GroupSelectionView: View {
         ).isDecided
     }
 
+    private func choice(group: ItemGroup, members: [IndexedItem]) -> Choice {
+        let evaluator = env.safety.evaluator()
+        let locked = Set(members.filter { evaluator.blockReason(for: $0) != nil }.map { $0.id })
+        let proposal = GroupProposal.initialDeletion(
+            members: members,
+            suggestedID: group.suggestedKeepID,
+            isLocked: { locked.contains($0.id) }
+        )
+        let deletion = GroupProposal.deletion(proposal: proposal, overrides: overrides, locked: locked)
+        return Choice(proposal: proposal, locked: locked, deletion: deletion)
+    }
+
     /// «Salta» lascia il gruppo da decidere; quando è già deciso diventa «Avanti».
     private func nextButton(_ sequence: GroupSequenceControl) -> some View {
         let decided = isGroupDecided
         return Button(decided ? "Avanti" : "Salta") {
-            selection.removeAll()
+            overrides.removeAll()
             sequence.onNext()
         }
         .fontWeight(decided ? .semibold : .regular)
@@ -135,7 +175,9 @@ struct GroupSelectionView: View {
     var body: some View {
         let _ = env.store.revision
         Group {
-            if let group, members.count >= 2 {
+            if let outcome {
+                outcomeView(outcome)
+            } else if let group, members.count >= 2 {
                 gallery(group: group, members: members)
             } else {
                 ContentUnavailableView(
@@ -150,24 +192,38 @@ struct GroupSelectionView: View {
         // Schermata di lavoro fitta: con il testo molto grande intestazione e barra si fermano a una
         // dimensione che lascia vedere la griglia.
         .compactControlText()
-        .navigationTitle(title)
+        .navigationTitle(outcome == nil ? title : "Fatto")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
         .toolbar {
-            if let sequence {
-                ToolbarItem(placement: .primaryAction) {
-                    nextButton(sequence)
+            if outcome == nil {
+                if let sequence {
+                    ToolbarItem(placement: .primaryAction) {
+                        nextButton(sequence)
+                    }
                 }
-            }
-            ToolbarItem(placement: .primaryAction) {
-                moreMenu
+                ToolbarItem(placement: .primaryAction) {
+                    moreMenu
+                }
             }
         }
         .navigationDestination(item: $comparison) { start in
             GroupComparisonView(groupID: groupID, initialItemID: start.itemID, showsGalleryButton: false)
         }
-        .fullScreenCover(item: $previewItem) { item in
-            ItemPreviewScreen(itemID: item.id, showsActions: false)
+        .onChange(of: comparison) { _, current in
+            guard current == nil else { return }
+            // Le scelte fatte nel confronto sono salvate: prevalgono su quelle fatte qui prima.
+            for member in members where statusesBeforeComparison[member.id] != member.reviewStatus {
+                overrides.removeValue(forKey: member.id)
+            }
+        }
+        .onChange(of: order) { _, newOrder in
+            if newOrder == .quality {
+                env.recordTutorial(.galleryOrder)
+            }
+        }
+        .fullScreenCover(item: $preview) { start in
+            ItemPreviewScreen(itemID: start.itemID, itemIDs: start.itemIDs, showsActions: false)
         }
         .toast($toast)
         .task(id: groupID) {
@@ -183,36 +239,72 @@ struct GroupSelectionView: View {
     private func gallery(group: ItemGroup, members: [IndexedItem]) -> some View {
         let ratings = QualityRanker.breakdowns(among: members)
         let positions = Dictionary(uniqueKeysWithValues: members.enumerated().map { ($0.element.id, $0.offset + 1) })
+        let current = choice(group: group, members: members)
+        let shown = ordered(members, ratings: ratings)
         return SelectableGrid(
-            items: ordered(members, ratings: ratings),
-            selection: $selection,
+            items: shown,
+            selection: deletionBinding(current, memberIDs: members.map { $0.id }),
             isSelecting: true,
             minimumCellSide: 105,
-            onOpen: { item in previewItem = item },
+            onOpen: { item in openPreview(item, among: shown) },
+            onExpand: { item in openPreview(item, among: shown) },
             header: {
                 header(group: group, members: members)
             },
             footer: {
                 EmptyView()
             },
-            cell: { item, isSelected in
+            cell: { item, deletes in
                 GroupGridCell(
                     item: item,
                     position: positions[item.id] ?? 0,
-                    isSelected: isSelected,
+                    deletes: deletes,
+                    isLocked: current.locked.contains(item.id),
                     isSuggested: item.id == group.suggestedKeepID,
-                    grade: item.isImage ? ratings[item.id]?.grade : nil
+                    grade: item.isImage ? ratings[item.id]?.grade : nil,
+                    onExpand: { openPreview(item, among: shown) }
                 )
                 .contextMenu {
-                    contextActions(for: item)
+                    contextActions(for: item, deletes: deletes, isLocked: current.locked.contains(item.id))
                 } preview: {
                     contextPreview(for: item)
                 }
             }
         )
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            actionBar(group: group, members: members)
+            actionBar(group: group, members: members, choice: current)
         }
+        .confirmationDialog(
+            deletionTitle(members: members, choice: current),
+            isPresented: $confirmsDeletion,
+            titleVisibility: .visible
+        ) {
+            Button(deletionButtonTitle(members: members, choice: current), role: .destructive) {
+                performDeletion(members: members, deletion: current.deletion)
+            }
+            Button("Annulla", role: .cancel) {}
+        } message: {
+            Text(deletionMessage(members: members, choice: current))
+        }
+    }
+
+    /// Selezione della griglia = elementi da eliminare. Toccare un elemento protetto non lo cambia.
+    private func deletionBinding(_ current: Choice, memberIDs: [UUID]) -> Binding<Set<UUID>> {
+        Binding(
+            get: { current.deletion },
+            set: { newValue in
+                if !newValue.intersection(current.locked).isEmpty {
+                    toast = "Gli elementi protetti non si possono eliminare."
+                }
+                overrides = GroupProposal.overrides(
+                    for: newValue.subtracting(current.locked),
+                    proposal: current.proposal,
+                    memberIDs: memberIDs,
+                    locked: current.locked
+                )
+                env.recordTutorial(.galleryToggle)
+            }
+        )
     }
 
     private func ordered(_ members: [IndexedItem], ratings: [UUID: QualityRanker.Breakdown]) -> [IndexedItem] {
@@ -230,188 +322,111 @@ struct GroupSelectionView: View {
         }
     }
 
+    private func openPreview(_ item: IndexedItem, among shown: [IndexedItem]) {
+        env.recordTutorial(.preview)
+        preview = PreviewStart(itemID: item.id, itemIDs: shown.map { $0.id })
+    }
+
     // MARK: - Intestazione
 
     private func header(group: ItemGroup, members: [IndexedItem]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             if let sequence {
-                sequenceProgress(sequence)
+                ProgressView(value: Double(sequence.position - 1), total: Double(max(sequence.total, 1)))
+                    .tint(Theme.keep)
+                    .accessibilityLabel("Gruppo \(sequence.position) di \(sequence.total)")
             }
             recommendation(group: group, members: members)
-            Text(isMasculine
-                 ? "Tocca o trascina il dito sulle anteprime per selezionarne tanti insieme. Tieni premuto per vederne uno in grande."
-                 : "Tocca o trascina il dito sulle anteprime per selezionarne tante insieme. Tieni premuto per vederne una in grande.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Picker("Ordine", selection: $order) {
-                ForEach(Order.allCases) { order in
-                    Text(order.title).tag(order)
+            // Su una riga se ci sta, altrimenti il pulsante va sotto la spiegazione.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: 10) {
+                    legend
+                    Spacer(minLength: 4)
+                    compareButton(group: group, members: members)
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    legend
+                    compareButton(group: group, members: members)
                 }
             }
-            .adaptiveSegmentedStyle()
-            .onChange(of: order) { _, newOrder in
-                if newOrder == .quality {
-                    env.recordTutorial(.galleryOrder)
-                }
-            }
-            quickSelection(group: group, members: members)
         }
         .padding(.top, 8)
     }
 
-    /// Avanzamento della revisione gruppo per gruppo e cosa succede dopo una scelta.
-    private func sequenceProgress(_ sequence: GroupSequenceControl) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            ProgressView(value: Double(sequence.position - 1), total: Double(max(sequence.total, 1)))
-                .tint(Theme.keep)
-                .accessibilityLabel("Gruppo \(sequence.position) di \(sequence.total)")
-            Text(isMasculine
-                 ? "Dopo «Tieni solo il migliore» o «Tieni tutti» compare da solo il gruppo successivo. «Salta» lo lascia da decidere."
-                 : "Dopo «Tieni solo la migliore» o «Tieni tutte» compare da solo il gruppo successivo. «Salta» lo lascia da decidere.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
+    /// Il consiglio in una riga: quale tenere e perché.
+    @ViewBuilder
     private func recommendation(group: ItemGroup, members: [IndexedItem]) -> some View {
-        let starredCount = members.filter { $0.isStarred }.count
-        return VStack(alignment: .leading, spacing: 6) {
-            if starredCount > 0 {
-                Label {
-                    Text(starredCount == 1
-                         ? "Hai scelto \(isMasculine ? "il tuo migliore" : "la tua migliore")"
-                         : "Hai scelto \(starredCount) migliori")
-                } icon: {
-                    Image(systemName: "star.fill")
-                        .foregroundStyle(Theme.best)
-                }
-                .font(.subheadline.weight(.semibold))
+        if let keepID = group.suggestedKeepID,
+           let index = members.firstIndex(where: { $0.id == keepID }),
+           let reason = group.suggestionReason {
+            Label {
+                Text(QualityRanker.sentence(position: index + 1, noun: members[index].definiteNoun, reason: reason))
+                    .fixedSize(horizontal: false, vertical: true)
+            } icon: {
+                Image(systemName: "sparkles")
+                    .foregroundStyle(Theme.keep)
             }
-            if let keepID = group.suggestedKeepID,
-               let index = members.firstIndex(where: { $0.id == keepID }),
-               let reason = group.suggestionReason {
-                Label {
-                    Text(QualityRanker.sentence(position: index + 1, noun: members[index].definiteNoun, reason: reason))
-                        .fixedSize(horizontal: false, vertical: true)
-                } icon: {
-                    Image(systemName: "sparkles")
-                        .foregroundStyle(Theme.keep)
-                }
-                .font(.subheadline.weight(.semibold))
-            }
+            .font(.subheadline.weight(.semibold))
+        } else {
             Text("\(group.kind.title). \(group.certainty.explanation)")
-                .font(.caption)
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
-    private func quickSelection(group: ItemGroup, members: [IndexedItem]) -> some View {
-        let keepers = GroupChoice.preferredKeepers(members: members, suggestedID: group.suggestedKeepID)
-        let hasStars = members.contains { $0.isStarred }
-        let all = Set(members.map { $0.id })
-        // Su più righe se serve: nessun pulsante resta tagliato sul bordo.
-        return FlowLayout(spacing: 8, lineSpacing: 8) {
-            quickButton(isMasculine ? "Seleziona tutti" : "Seleziona tutte") {
-                selection = all
-            }
-            if !keepers.isEmpty && keepers.count < members.count {
-                quickButton(hasStars
-                            ? (isMasculine ? "Tutti tranne i tuoi migliori" : "Tutte tranne le tue migliori")
-                            : (isMasculine ? "Tutti tranne il consigliato" : "Tutte tranne la consigliata")) {
-                    selection = all.subtracting(keepers)
-                }
-            }
-            if !selection.isEmpty {
-                quickButton("Deseleziona") {
-                    selection.removeAll()
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+    /// Cosa significano i due segni sulle anteprime.
+    private var legend: some View {
+        Text("\(Text(Image(systemName: "checkmark.circle.fill")).foregroundStyle(Theme.keep)) resta · \(Text(Image(systemName: "trash.circle.fill")).foregroundStyle(Theme.remove)) si elimina · tocca per cambiare")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityLabel("Segno verde: resta. Cestino: si elimina. Tocca una foto per cambiare.")
     }
 
-    private func quickButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(title) {
-            env.recordTutorial(.quickSelect)
-            action()
-        }
-            .font(.footnote.weight(.semibold))
+    @ViewBuilder
+    private func compareButton(group: ItemGroup, members: [IndexedItem]) -> some View {
+        if opensComparison {
+            Button {
+                statusesBeforeComparison = Dictionary(uniqueKeysWithValues: members.map { ($0.id, $0.reviewStatus) })
+                comparison = ComparisonStart(itemID: group.suggestedKeepID ?? members[0].id)
+            } label: {
+                Label("Confronta", systemImage: "rectangle.split.2x1")
+            }
+            .font(.subheadline.weight(.semibold))
             .buttonStyle(.bordered)
             .controlSize(.small)
+        }
     }
 
     // MARK: - Barra delle azioni
 
-    private func actionBar(group: ItemGroup, members: [IndexedItem]) -> some View {
-        let selected = members.filter { selection.contains($0.id) }
-        let removesStars = !selected.isEmpty && selected.allSatisfy { $0.isStarred }
-        let keepers = GroupChoice.preferredKeepers(members: members, suggestedID: group.suggestedKeepID)
-        let starredCount = members.filter { $0.isStarred }.count
+    private func actionBar(group: ItemGroup, members: [IndexedItem], choice: Choice) -> some View {
+        let deleting = members.filter { choice.deletion.contains($0.id) }
+        let keepCount = members.count - deleting.count
         return VStack(spacing: 8) {
-            HStack {
-                Text(selectionSummary(selected.count))
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                    .accessibilityIdentifier("grid.selectionCount")
-                Spacer(minLength: 8)
-                if opensComparison {
-                    Button {
-                        let start = selected.first?.id ?? group.suggestedKeepID ?? members[0].id
-                        comparison = ComparisonStart(itemID: start)
-                    } label: {
-                        Label("Confronta", systemImage: "rectangle.split.2x1")
-                    }
-                    .font(.subheadline.weight(.semibold))
+            Text("\(deleting.count) da eliminare · \(keepCount) da tenere")
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("grid.selectionCount")
+            // Affiancati se ci stanno, uno sopra l'altro con il testo grande.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    keepAllButton(members: members)
+                    primaryButton(deleting: deleting)
+                }
+                VStack(spacing: 8) {
+                    primaryButton(deleting: deleting)
+                    keepAllButton(members: members)
                 }
             }
-            HStack(spacing: 8) {
-                BarActionButton(
-                    title: removesStars ? "Togli stella" : "Migliore",
-                    systemImage: removesStars ? "star.slash" : "star.fill",
-                    tint: Theme.best,
-                    accessibilityTitle: removesStars ? "Togli la stella" : "Segna come migliori"
-                ) {
-                    if removesStars {
-                        removeStars(selected)
-                    } else {
-                        markBest(selected)
-                    }
-                }
-                BarActionButton(title: "Tieni", systemImage: "checkmark", tint: Theme.keep, accessibilityTitle: "Conserva le selezionate") {
-                    keep(selected)
-                }
-                BarActionButton(
-                    title: "Elimina",
-                    systemImage: "trash",
-                    tint: Theme.remove,
-                    accessibilityTitle: "Proponi le selezionate per l'eliminazione"
-                ) {
-                    propose(selected)
-                }
-            }
-            .disabled(selected.isEmpty)
-            if !keepers.isEmpty && keepers.count < members.count {
-                Button {
-                    keepOnly(keepers, in: group)
-                } label: {
-                    Label(
-                        GroupWording.keepBest(starredCount: starredCount, masculine: isMasculine),
-                        systemImage: starredCount > 0 ? "star.fill" : "sparkles"
-                    )
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(Theme.keep)
-                .controlSize(.large)
-                .accessibilityHint("Conserva le migliori e aggiunge le altre alla lista di revisione. Non elimina nulla.")
+            if !deletesDirectly {
+                Text("Le foto scartate passano alla Revisione, come le altre scelte della pulizia.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .padding(.horizontal, 14)
@@ -422,12 +437,95 @@ struct GroupSelectionView: View {
         .compactControlText()
     }
 
-    private func selectionSummary(_ count: Int) -> String {
-        switch count {
-        case 0: return "Nessuna selezione"
-        case 1: return isMasculine ? "1 selezionato" : "1 selezionata"
-        default: return "\(count) \(isMasculine ? "selezionati" : "selezionate")"
+    private func primaryButton(deleting: [IndexedItem]) -> some View {
+        let bytes = deleting.reduce(Int64(0)) { $0 + $1.bytes }
+        let title: String
+        if deleting.isEmpty {
+            title = deletesDirectly ? "Elimina" : "Scarta"
+        } else if deletesDirectly {
+            title = "Elimina \(deleting.count) · \(Format.bytes(bytes))"
+        } else {
+            title = "Scarta \(deleting.count) · \(Format.bytes(bytes))"
         }
+        return Button {
+            if deletesDirectly {
+                confirmsDeletion = true
+            } else {
+                proposeForReview(deletion: Set(deleting.map { $0.id }))
+            }
+        } label: {
+            Group {
+                if isDeleting {
+                    ProgressView()
+                        .tint(.white)
+                } else {
+                    Label(title, systemImage: "trash")
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(Theme.remove)
+        .controlSize(.large)
+        .disabled(deleting.isEmpty || isDeleting)
+        .accessibilityLabel(deleting.isEmpty ? "Nessuna foto da eliminare" : title)
+        .accessibilityIdentifier("group.delete")
+    }
+
+    private func keepAllButton(members: [IndexedItem]) -> some View {
+        Button {
+            keepAll(members)
+        } label: {
+            Text(isMasculine ? "Tieni tutti" : "Tieni tutte")
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+        .tint(Theme.keep)
+        .controlSize(.large)
+        .disabled(isDeleting)
+        .accessibilityIdentifier("group.keepAll")
+    }
+
+    // MARK: - Conferma
+
+    private var noun: (one: String, many: String) {
+        if members.first?.isImage ?? false { return ("foto", "foto") }
+        if members.first?.isVideo ?? false { return ("video", "video") }
+        return ("elemento", "elementi")
+    }
+
+    private func deletionTitle(members: [IndexedItem], choice: Choice) -> String {
+        let count = choice.deletion.count
+        return "Eliminare \(count) \(count == 1 ? noun.one : noun.many)?"
+    }
+
+    private func deletionButtonTitle(members: [IndexedItem], choice: Choice) -> String {
+        let count = choice.deletion.count
+        return "Elimina \(count) \(count == 1 ? noun.one : noun.many)"
+    }
+
+    private func deletionMessage(members: [IndexedItem], choice: Choice) -> String {
+        let deleting = members.filter { choice.deletion.contains($0.id) }
+        let bytes = deleting.reduce(Int64(0)) { $0 + $1.bytes }
+        var parts: [String] = []
+        if deleting.allSatisfy({ $0.source == .photoLibrary }) {
+            parts.append("Liberi fino a \(Format.bytes(bytes)). Restano 30 giorni in «Eliminati di recente» dell'app Foto e con Foto di iCloud spariscono anche dagli altri dispositivi.")
+        } else {
+            parts.append("Liberi fino a \(Format.bytes(bytes)). I file vanno nel cestino dell'app File, se il servizio lo consente.")
+        }
+        let evaluator = env.safety.evaluator()
+        let cautious = deleting.filter { evaluator.needsCaution($0) }.count
+        if cautious > 0 {
+            parts.append(cautious == 1
+                         ? "Attenzione: uno potrebbe contenere qualcosa di importante."
+                         : "Attenzione: \(cautious) potrebbero contenere qualcosa di importante.")
+        }
+        parts.append("iOS ti chiederà ancora una conferma.")
+        return parts.joined(separator: " ")
     }
 
     // MARK: - Menu
@@ -436,10 +534,31 @@ struct GroupSelectionView: View {
         let current = members
         let hasStars = current.contains { $0.isStarred }
         return Menu {
-            Button {
-                keepAll(current)
-            } label: {
-                Label(isMasculine ? "Tieni tutti" : "Tieni tutte", systemImage: "checkmark.circle")
+            if deletesDirectly {
+                Button {
+                    addToReview()
+                } label: {
+                    Label("Aggiungi alla Revisione", systemImage: "tray.and.arrow.down")
+                }
+            }
+            Section {
+                Button {
+                    env.recordTutorial(.quickSelect)
+                    markAll(current)
+                } label: {
+                    Label(isMasculine ? "Segna tutti da eliminare" : "Segna tutte da eliminare", systemImage: "trash")
+                }
+                Button {
+                    env.recordTutorial(.quickSelect)
+                    overrides.removeAll()
+                } label: {
+                    Label("Ripristina la proposta", systemImage: "arrow.counterclockwise")
+                }
+            }
+            Picker("Ordine", selection: $order) {
+                ForEach(Order.allCases) { order in
+                    Text(order.title).tag(order)
+                }
             }
             if hasStars {
                 Button {
@@ -451,20 +570,21 @@ struct GroupSelectionView: View {
         } label: {
             Label("Altre azioni", systemImage: "ellipsis.circle")
         }
-        .disabled(current.count < 2)
+        .disabled(current.count < 2 || isDeleting)
     }
 
     @ViewBuilder
-    private func contextActions(for item: IndexedItem) -> some View {
+    private func contextActions(for item: IndexedItem, deletes: Bool, isLocked: Bool) -> some View {
         Button {
             env.recordTutorial(.galleryMenu)
-            previewItem = item
+            openPreview(item, among: members)
         } label: {
             Label(item.isVideo ? "Guarda" : "Vedi a tutto schermo", systemImage: item.isVideo ? "play" : "arrow.up.left.and.arrow.down.right")
         }
         if opensComparison {
             Button {
                 env.recordTutorial(.galleryMenu)
+                statusesBeforeComparison = Dictionary(uniqueKeysWithValues: members.map { ($0.id, $0.reviewStatus) })
                 comparison = ComparisonStart(itemID: item.id)
             } label: {
                 Label("Confronta da qui", systemImage: "rectangle.split.2x1")
@@ -483,15 +603,22 @@ struct GroupSelectionView: View {
                 Label("Segna come migliore", systemImage: "star")
             }
         }
-        Button {
-            keep([item])
-        } label: {
-            Label("Conserva", systemImage: "checkmark")
-        }
-        Button(role: .destructive) {
-            propose([item])
-        } label: {
-            Label("Proponi per l'eliminazione", systemImage: "trash")
+        if !isLocked {
+            if deletes {
+                Button {
+                    env.recordTutorial(.galleryMenu)
+                    setDeletion(false, for: item)
+                } label: {
+                    Label("Tieni", systemImage: "checkmark")
+                }
+            } else {
+                Button(role: .destructive) {
+                    env.recordTutorial(.galleryMenu)
+                    setDeletion(true, for: item)
+                } label: {
+                    Label("Elimina", systemImage: "trash")
+                }
+            }
         }
     }
 
@@ -518,135 +645,255 @@ struct GroupSelectionView: View {
         return CGSize(width: width, height: min(max(width * ratio, 180), 460))
     }
 
-    // MARK: - Azioni (nessuna elimina: cambiano solo lo stato di revisione)
+    // MARK: - Esito
+
+    /// Dopo un'eliminazione fuori dalla revisione gruppo per gruppo: cosa è successo e come liberare
+    /// davvero lo spazio.
+    private func outcomeView(_ decision: GroupDecision) -> some View {
+        List {
+            Section {
+                VStack(spacing: 10) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 48))
+                        .foregroundStyle(Theme.keep)
+                        .accessibilityHidden(true)
+                    Text(decision.message)
+                        .font(.headline)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+            }
+            if decision.deletedCount > 0 {
+                RecentlyDeletedSection(count: decision.deletedCount, deviceBytes: decision.freedBytes)
+            }
+            Section {
+                Button {
+                    dismiss()
+                } label: {
+                    Text("Torna ai gruppi")
+                        .frame(maxWidth: .infinity)
+                }
+                .accessibilityIdentifier("group.done")
+            }
+        }
+    }
+
+    // MARK: - Azioni
+
+    private func setDeletion(_ deletes: Bool, for item: IndexedItem) {
+        guard let group else { return }
+        let current = choice(group: group, members: members)
+        var next = current.deletion
+        if deletes {
+            next.insert(item.id)
+        } else {
+            next.remove(item.id)
+        }
+        overrides = GroupProposal.overrides(
+            for: next,
+            proposal: current.proposal,
+            memberIDs: members.map { $0.id },
+            locked: current.locked
+        )
+    }
+
+    private func markAll(_ items: [IndexedItem]) {
+        guard let group else { return }
+        let current = choice(group: group, members: items)
+        overrides = GroupProposal.overrides(
+            for: Set(items.map { $0.id }),
+            proposal: current.proposal,
+            memberIDs: items.map { $0.id },
+            locked: current.locked
+        )
+    }
 
     private func markBest(_ items: [IndexedItem]) {
         guard !items.isEmpty else { return }
-        let count = env.sessions.markBest(items.map { $0.id })
+        env.sessions.markBest(items.map { $0.id })
         env.recordTutorial(.starBest)
-        selection.removeAll()
-        if count == 1 {
-            toast = isMasculine ? "Segnato come migliore: resta conservato." : "Segnata come migliore: resta conservata."
-        } else {
-            toast = isMasculine
-                ? "\(count) segnati come migliori: restano conservati."
-                : "\(count) segnate come migliori: restano conservate."
+        for item in items {
+            overrides.removeValue(forKey: item.id)
         }
+        toast = isMasculine ? "Segnato come migliore: resta conservato." : "Segnata come migliore: resta conservata."
     }
 
     private func removeStars(_ items: [IndexedItem]) {
         guard !items.isEmpty else { return }
         env.sessions.removeBest(items.map { $0.id })
         env.recordTutorial(.removeStar)
-        selection.removeAll()
         toast = items.count == 1 ? "Stella tolta." : "Stelle tolte."
-    }
-
-    private func keep(_ items: [IndexedItem]) {
-        guard !items.isEmpty else { return }
-        env.sessions.decideGroup(keep: items.map { $0.id }, delete: [])
-        selection.removeAll()
-        toast = "\(Format.plural(items.count, "elemento conservato", "elementi conservati"))."
-    }
-
-    private func propose(_ items: [IndexedItem]) {
-        guard !items.isEmpty else { return }
-        let result = env.sessions.decideGroup(keep: [], delete: items.map { $0.id })
-        selection.removeAll()
-        toast = proposalMessage(result)
-    }
-
-    private func keepOnly(_ keepers: Set<UUID>, in group: ItemGroup) {
-        let choice = GroupChoice.keepOnly(keepers, among: group.memberIDs)
-        let result = env.sessions.decideGroup(keep: choice.keep, delete: choice.delete)
-        env.recordTutorial(.keepBest)
-        selection.removeAll()
-        finish(proposalMessage(result))
     }
 
     private func keepAll(_ items: [IndexedItem]) {
         guard !items.isEmpty else { return }
         env.sessions.decideGroup(keep: items.map { $0.id }, delete: [])
-        selection.removeAll()
-        finish("Tutti gli elementi del gruppo sono stati conservati.")
+        overrides.removeAll()
+        finish(GroupDecision(message: "Tutti gli elementi del gruppo sono stati conservati."))
     }
 
-    private func proposalMessage(_ result: (applied: Int, blocked: Int)) -> String {
+    /// Salva la scelta senza eliminare: le foto scartate passano alla Revisione.
+    private func addToReview() {
+        guard let group else { return }
+        let current = choice(group: group, members: members)
+        guard !current.deletion.isEmpty else {
+            toast = "Tocca prima le foto da eliminare."
+            return
+        }
+        proposeForReview(deletion: current.deletion)
+    }
+
+    private func proposeForReview(deletion: Set<UUID>) {
+        let split = GroupProposal.split(memberIDs: members.map { $0.id }, deletion: deletion)
+        let result = env.sessions.decideGroup(keep: split.keep, delete: split.delete)
+        overrides.removeAll()
         var message = "\(Format.plural(result.applied, "elemento aggiunto", "elementi aggiunti")) alla revisione."
         if result.blocked > 0 {
             message += " \(Format.plural(result.blocked, "protetto saltato", "protetti saltati"))."
         }
-        return message
+        finish(GroupDecision(message: message))
     }
 
-    private func finish(_ message: String) {
+    /// Tiene le foto con il segno verde ed elimina subito le altre. Se si annulla la conferma di iOS
+    /// tutto torna com'era.
+    private func performDeletion(members: [IndexedItem], deletion: Set<UUID>) {
+        let split = GroupProposal.split(memberIDs: members.map { $0.id }, deletion: deletion)
+        guard !split.delete.isEmpty, !isDeleting else { return }
+        isDeleting = true
+        let previous = members.map { (id: $0.id, status: $0.reviewStatus) }
+        let isImageGroup = members.first?.isImage ?? false
+        let isVideoGroup = members.first?.isVideo ?? false
+        let result = env.sessions.decideGroup(keep: split.keep, delete: split.delete)
+        let accepted = split.delete.filter { env.store.item($0)?.reviewStatus.isQueuedForDeletion == true }
+        Task {
+            let report = await env.deleteNow(accepted)
+            isDeleting = false
+            guard let report else {
+                restore(previous)
+                toast = "Non è stato possibile eliminare: controlla protezioni e permessi."
+                return
+            }
+            if report.systemDialogDeclined {
+                restore(previous)
+                toast = "Eliminazione annullata: non è stato eliminato nulla."
+                return
+            }
+            let deleted = report.deletedCount
+            let freed = report.outcomes
+                .filter { $0.state == .deleted }
+                .reduce(Int64(0)) { $0 + $1.deviceBytes }
+            guard deleted > 0 else {
+                toast = report.note ?? "Non è stato eliminato nulla: gli elementi non riusciti sono nella Revisione."
+                return
+            }
+            var message = Self.deletedPhrase(deleted, isImage: isImageGroup, isVideo: isVideoGroup)
+            if report.failedCount > 0 {
+                message += " \(Format.plural(report.failedCount, "non è riuscito", "non sono riusciti")): li trovi nella Revisione."
+            }
+            if result.blocked > 0 {
+                message += " \(Format.plural(result.blocked, "protetto è rimasto", "protetti sono rimasti"))."
+            }
+            overrides.removeAll()
+            finish(GroupDecision(message: message, deletedCount: deleted, freedBytes: freed))
+        }
+    }
+
+    /// "Eliminate 3 foto." / "Eliminato 1 video."
+    private static func deletedPhrase(_ count: Int, isImage: Bool, isVideo: Bool) -> String {
+        if isImage {
+            return count == 1 ? "Eliminata 1 foto." : "Eliminate \(count) foto."
+        }
+        if isVideo {
+            return count == 1 ? "Eliminato 1 video." : "Eliminati \(count) video."
+        }
+        return count == 1 ? "Eliminato 1 elemento." : "Eliminati \(count) elementi."
+    }
+
+    /// Rimette lo stato di revisione che gli elementi avevano prima della scelta.
+    private func restore(_ previous: [(id: UUID, status: ReviewStatus)]) {
+        let grouped = Dictionary(grouping: previous, by: { $0.status })
+        for (status, entries) in grouped {
+            env.store.setReviewStatus(status, for: entries.map { $0.id })
+        }
+    }
+
+    private func finish(_ decision: GroupDecision) {
         if let sequence {
             // Revisione gruppo per gruppo: il messaggio lo mostra la sequenza, che passa al successivo.
-            sequence.onDecided(message)
+            sequence.onDecided(decision)
         } else if closesAfterDecision {
             dismiss()
+        } else if decision.deletedCount > 0 {
+            outcome = decision
         } else {
-            toast = message
+            toast = decision.message
         }
     }
 }
 
-/// Cella della galleria: anteprima, stato della decisione, stella o consiglio, voto e selezione.
+/// Cella della galleria: anteprima, scelta (resta o si elimina), stella o consiglio, voto e
+/// pulsante per vederla a tutto schermo.
 private struct GroupGridCell: View {
     let item: IndexedItem
     let position: Int
-    let isSelected: Bool
+    let deletes: Bool
+    let isLocked: Bool
     let isSuggested: Bool
     let grade: Int?
+    let onExpand: () -> Void
 
     var body: some View {
         ItemThumbnailView(item: item, pointSide: 170)
             .overlay {
-                // Ciò che è già proposto per l'eliminazione appare spento.
-                if item.reviewStatus.isQueuedForDeletion {
-                    Color.black.opacity(0.4)
+                // Ciò che verrà eliminato appare spento.
+                if deletes {
+                    Color.black.opacity(0.45)
                 }
             }
             .overlay(alignment: .topLeading) {
-                statusBadge
+                bestBadge
                     .padding(5)
             }
             .overlay(alignment: .topTrailing) {
-                bestBadge
-                    .padding(5)
+                Button(action: onExpand) {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 28, height: 28)
+                        .background(.black.opacity(0.55), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(4)
+                .accessibilityHidden(true)
             }
             .overlay(alignment: .bottomLeading) {
                 cornerNote
                     .padding(5)
             }
             .overlay(alignment: .bottomTrailing) {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(.white, isSelected ? Color.accentColor : Color.black.opacity(0.3))
-                    .shadow(color: .black.opacity(0.35), radius: 1)
+                choiceBadge
                     .padding(5)
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: 3)
+                    .strokeBorder(deletes ? Theme.remove : Color.clear, lineWidth: 3)
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(spokenDescription)
-            .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+            .accessibilityAddTraits(deletes ? [.isSelected] : [])
     }
 
+    /// Un solo segno dice cosa succede alla foto: verde resta, cestino si elimina, lucchetto protetta.
     @ViewBuilder
-    private var statusBadge: some View {
-        switch item.reviewStatus {
-        case .kept:
-            badge("checkmark", tint: Theme.keep)
-        case .markedForDeletion, .deletionFailed:
+    private var choiceBadge: some View {
+        if isLocked {
+            badge("lock.fill", tint: .gray)
+        } else if deletes {
             badge("trash.fill", tint: Theme.remove)
-        case .postponed:
-            badge("clock.fill", tint: Theme.later)
-        case .unreviewed:
-            EmptyView()
+        } else {
+            badge("checkmark", tint: Theme.keep)
         }
     }
 
@@ -659,7 +906,11 @@ private struct GroupGridCell: View {
                 .frame(width: 26, height: 26)
                 .background(.black.opacity(0.6), in: Circle())
         } else if isSuggested {
-            badge("sparkles", tint: Theme.keep)
+            Image(systemName: "sparkles")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 26, height: 26)
+                .background(Theme.keep.opacity(0.85), in: Circle())
         }
     }
 
@@ -685,21 +936,28 @@ private struct GroupGridCell: View {
 
     private func badge(_ systemImage: String, tint: Color) -> some View {
         Image(systemName: systemImage)
-            .font(.system(size: 11, weight: .bold))
+            .font(.system(size: 13, weight: .bold))
             .foregroundStyle(.white)
-            .frame(width: 22, height: 22)
+            .frame(width: 28, height: 28)
             .background(tint, in: Circle())
+            .overlay {
+                Circle().strokeBorder(.white.opacity(0.9), lineWidth: 1.5)
+            }
     }
 
-    /// "Foto 2, la tua migliore, consigliata, voto 62 su 100, Conservato".
+    /// "Foto 2, da eliminare, la tua migliore, consigliata, voto 62 su 100".
     private var spokenDescription: String {
         let masculine = item.usesMasculineWording
         var parts = ["\(item.isVideo ? "Video" : item.isImage ? "Foto" : "Elemento") \(position)"]
+        if isLocked {
+            parts.append(masculine ? "protetto" : "protetta")
+        } else {
+            parts.append(deletes ? "da eliminare" : "da tenere")
+        }
         if item.isStarred { parts.append(GroupWording.starred(masculine: masculine).lowercased()) }
         if isSuggested { parts.append(GroupWording.suggested(masculine: masculine).lowercased()) }
         if let grade { parts.append("voto \(grade) su 100") }
         if item.duration > 0 { parts.append(Format.duration(item.duration)) }
-        if item.reviewStatus != .unreviewed { parts.append(item.reviewStatus.title) }
         return parts.joined(separator: ", ")
     }
 }

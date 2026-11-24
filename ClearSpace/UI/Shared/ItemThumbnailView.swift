@@ -99,17 +99,21 @@ struct ItemTile: View {
                     if item.traits.contains(.cloudOnly) {
                         badge("icloud", tint: Theme.info)
                     }
-                    switch item.reviewStatus {
-                    case .markedForDeletion:
-                        badge("trash.fill", tint: Theme.remove)
-                    case .deletionFailed:
-                        badge("exclamationmark.triangle.fill", tint: Theme.remove)
-                    case .kept:
-                        badge("checkmark", tint: Theme.keep)
-                    case .postponed:
-                        badge("clock.fill", tint: Theme.later)
-                    case .unreviewed:
-                        EmptyView()
+                    // Durante la selezione resta solo il cerchio della selezione: un secondo segno di
+                    // spunta («conservato») sembrerebbe un'altra selezione.
+                    if !showsSelection {
+                        switch item.reviewStatus {
+                        case .markedForDeletion:
+                            badge("trash.fill", tint: Theme.remove)
+                        case .deletionFailed:
+                            badge("exclamationmark.triangle.fill", tint: Theme.remove)
+                        case .kept:
+                            badge("checkmark", tint: Theme.keep)
+                        case .postponed:
+                            badge("clock.fill", tint: Theme.later)
+                        case .unreviewed:
+                            EmptyView()
+                        }
                     }
                 }
                 .padding(4)
