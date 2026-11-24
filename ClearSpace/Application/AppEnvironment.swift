@@ -18,6 +18,47 @@ final class AppRouter {
     var selectedTab: AppTab = .home
 }
 
+/// Esito di un'eliminazione fatta subito, senza passare dalla scheda Revisione.
+struct DirectDeletionResult: Equatable, Sendable {
+    enum Outcome: Equatable, Sendable {
+        /// Eliminati, almeno in parte: restano 30 giorni in «Eliminati di recente».
+        case deleted
+        /// L'utente ha annullato la conferma di iOS: tutto è tornato com'era.
+        case cancelled
+        /// Non è stato eliminato nulla; `note` dice perché.
+        case nothing
+    }
+
+    var outcome: Outcome
+    var deletedCount = 0
+    /// Spazio che gli elementi eliminati occupano ancora sull'iPhone finché resta pieno
+    /// «Eliminati di recente».
+    var freedBytes: Int64 = 0
+    var failedCount = 0
+    /// Elementi protetti, saltati.
+    var blockedCount = 0
+    var note: String?
+
+    /// "Eliminate 3 foto." / "Eliminato 1 video." / "Eliminati 4 elementi.", con ciò che non è riuscito.
+    func summary(isImage: Bool, isVideo: Bool) -> String {
+        var message: String
+        if isImage {
+            message = deletedCount == 1 ? "Eliminata 1 foto." : "Eliminate \(deletedCount) foto."
+        } else if isVideo {
+            message = deletedCount == 1 ? "Eliminato 1 video." : "Eliminati \(deletedCount) video."
+        } else {
+            message = deletedCount == 1 ? "Eliminato 1 elemento." : "Eliminati \(deletedCount) elementi."
+        }
+        if failedCount > 0 {
+            message += " \(Format.plural(failedCount, "non è riuscito", "non sono riusciti")): li trovi nella Revisione."
+        }
+        if blockedCount > 0 {
+            message += " \(Format.plural(blockedCount, "protetto è rimasto", "protetti sono rimasti"))."
+        }
+        return message
+    }
+}
+
 /// Contenitore dei servizi dell'app: li crea una sola volta e li collega tra loro.
 ///
 /// Strati, dall'alto verso il basso:
@@ -337,6 +378,77 @@ final class AppEnvironment {
             scan.noteLibraryChanged()
         }
         return report
+    }
+
+    /// Tiene `keepIDs` ed elimina subito `deleteIDs`: è «Elimina» nella galleria di un gruppo, nella
+    /// griglia di una categoria e su più gruppi insieme. Passa da `deleteNow`, quindi dal motore di
+    /// sicurezza (gli elementi protetti vengono saltati) e, per le foto, dalla conferma di iOS.
+    /// Se la conferma di iOS viene annullata, o non si può eliminare nulla, ogni elemento torna allo
+    /// stato di revisione che aveva prima.
+    func deleteDirectly(keep keepIDs: [UUID] = [], delete deleteIDs: [UUID]) async -> DirectDeletionResult {
+        var previous: [UUID: ReviewStatus] = [:]
+        for id in keepIDs + deleteIDs {
+            if let item = store.item(id) {
+                previous[id] = item.reviewStatus
+            }
+        }
+        let marking = sessions.decideGroup(keep: keepIDs, delete: deleteIDs)
+        let accepted = deleteIDs.filter { store.item($0)?.reviewStatus.isQueuedForDeletion == true }
+        guard !accepted.isEmpty else {
+            restoreReviewStatuses(previous)
+            return DirectDeletionResult(
+                outcome: .nothing,
+                blockedCount: marking.blocked,
+                note: marking.blocked > 0
+                    ? "Gli elementi protetti non si possono eliminare."
+                    : "Non c'è nulla da eliminare."
+            )
+        }
+        guard let report = await deleteNow(accepted) else {
+            restoreReviewStatuses(previous)
+            return DirectDeletionResult(
+                outcome: .nothing,
+                blockedCount: marking.blocked,
+                note: "Non è stato possibile eliminare: controlla protezioni e permessi."
+            )
+        }
+        if report.systemDialogDeclined {
+            restoreReviewStatuses(previous)
+            return DirectDeletionResult(outcome: .cancelled)
+        }
+        let freed = report.outcomes
+            .filter { $0.state == .deleted }
+            .reduce(Int64(0)) { $0 + $1.deviceBytes }
+        guard report.deletedCount > 0 else {
+            return DirectDeletionResult(
+                outcome: .nothing,
+                failedCount: report.failedCount,
+                blockedCount: marking.blocked,
+                note: report.note ?? "Non è stato eliminato nulla: gli elementi non riusciti sono nella Revisione."
+            )
+        }
+        return DirectDeletionResult(
+            outcome: .deleted,
+            deletedCount: report.deletedCount,
+            freedBytes: freed,
+            failedCount: report.failedCount,
+            blockedCount: marking.blocked
+        )
+    }
+
+    /// Serve anche la conferma di ClearSpace prima di eliminare subito: per i file, che non hanno la
+    /// conferma di iOS, e per i contenuti che potrebbero essere importanti (ricevute, documenti…).
+    /// Per le sole foto e video basta la conferma di iOS, che mostra quanti elementi verranno eliminati.
+    func needsInAppConfirmation(_ items: [IndexedItem]) -> Bool {
+        let evaluator = safety.evaluator()
+        return items.contains { $0.source != .photoLibrary || evaluator.needsCaution($0) }
+    }
+
+    private func restoreReviewStatuses(_ previous: [UUID: ReviewStatus]) {
+        let grouped = Dictionary(grouping: previous.keys, by: { previous[$0] ?? .unreviewed })
+        for (status, ids) in grouped {
+            store.setReviewStatus(status, for: ids)
+        }
     }
 
     /// Revoca l'accesso a una cartella e toglie i suoi elementi dall'indice. I file non vengono toccati.

@@ -52,10 +52,13 @@ extension IndexedItem {
 /// - All'apertura la migliore (la stella dell'utente o la consigliata) è da tenere, le altre sono
 ///   da eliminare. Un tocco cambia la scelta di una foto; trascinando il dito in orizzontale si
 ///   cambiano tante foto insieme, come nella selezione dell'app Foto.
-/// - «Elimina» elimina subito le foto scartate: ClearSpace chiede una conferma e iOS un'altra, poi
-///   le foto restano 30 giorni in «Eliminati di recente». Aperta dallo swipe, invece, la galleria
-///   segue le regole della sessione e le foto scartate passano alla Revisione.
-/// - Le scelte fatte con i tocchi non vengono salvate finché non si conferma.
+/// - «Elimina» elimina subito le foto scartate (`AppEnvironment.deleteDirectly`): per foto e video
+///   basta la conferma di iOS, per file e contenuti importanti ClearSpace chiede prima la sua; poi le
+///   foto restano 30 giorni in «Eliminati di recente». Aperta dallo swipe, invece, la galleria segue
+///   le regole della sessione e le foto scartate passano alla Revisione.
+/// - Le scelte fatte con i tocchi non vengono salvate finché non si conferma. Dal primo tocco la
+///   proposta resta ferma, anche se il consiglio cambia mentre la galleria è aperta.
+/// - Fino a quattro scatti le anteprime sono su due colonne, grandi abbastanza da giudicarle.
 struct GroupSelectionView: View {
     let groupID: UUID
     /// Chiude la galleria dopo una scelta che decide tutto il gruppo (usato dalla modalità swipe).
@@ -72,6 +75,11 @@ struct GroupSelectionView: View {
     @Environment(\.dismiss) private var dismiss
     /// Scelte fatte a mano rispetto alla proposta: `true` = elimina, `false` = tieni.
     @State private var overrides: [UUID: Bool] = [:]
+    /// Proposta fissata alla prima scelta a mano: se nel frattempo il consiglio cambia (l'analisi del
+    /// gruppo finisce mentre la galleria è aperta), le scelte già fatte non si spostano su altre foto.
+    @State private var frozenProposal: Set<UUID>?
+    /// Cresce a ogni eliminazione riuscita: fa vibrare leggermente il telefono.
+    @State private var deletionsDone = 0
     @State private var order: Order = .shot
     @State private var comparison: ComparisonStart?
     /// Stato degli elementi quando si è aperto il confronto: al ritorno le scelte fatte là prevalgono.
@@ -151,7 +159,7 @@ struct GroupSelectionView: View {
     private func choice(group: ItemGroup, members: [IndexedItem]) -> Choice {
         let evaluator = env.safety.evaluator()
         let locked = Set(members.filter { evaluator.blockReason(for: $0) != nil }.map { $0.id })
-        let proposal = GroupProposal.initialDeletion(
+        let proposal = frozenProposal ?? GroupProposal.initialDeletion(
             members: members,
             suggestedID: group.suggestedKeepID,
             isLocked: { locked.contains($0.id) }
@@ -160,11 +168,24 @@ struct GroupSelectionView: View {
         return Choice(proposal: proposal, locked: locked, deletion: deletion)
     }
 
+    /// Le scelte a mano partono da qui: da adesso la proposta non cambia più da sola.
+    private func freeze(_ current: Choice) {
+        if frozenProposal == nil {
+            frozenProposal = current.proposal
+        }
+    }
+
+    /// Torna alla proposta dell'app, ricalcolata con il consiglio attuale.
+    private func resetChoices() {
+        overrides.removeAll()
+        frozenProposal = nil
+    }
+
     /// «Salta» lascia il gruppo da decidere; quando è già deciso diventa «Avanti».
     private func nextButton(_ sequence: GroupSequenceControl) -> some View {
         let decided = isGroupDecided
         return Button(decided ? "Avanti" : "Salta") {
-            overrides.removeAll()
+            resetChoices()
             sequence.onNext()
         }
         .fontWeight(decided ? .semibold : .regular)
@@ -213,8 +234,13 @@ struct GroupSelectionView: View {
         .onChange(of: comparison) { _, current in
             guard current == nil else { return }
             // Le scelte fatte nel confronto sono salvate: prevalgono su quelle fatte qui prima.
+            var changed = false
             for member in members where statusesBeforeComparison[member.id] != member.reviewStatus {
                 overrides.removeValue(forKey: member.id)
+                changed = true
+            }
+            if changed {
+                frozenProposal = nil
             }
         }
         .onChange(of: order) { _, newOrder in
@@ -225,6 +251,7 @@ struct GroupSelectionView: View {
         .fullScreenCover(item: $preview) { start in
             ItemPreviewScreen(itemID: start.itemID, itemIDs: start.itemIDs, showsActions: false)
         }
+        .sensoryFeedback(.success, trigger: deletionsDone)
         .toast($toast)
         .task(id: groupID) {
             env.recordTutorial(.openGallery)
@@ -241,11 +268,15 @@ struct GroupSelectionView: View {
         let positions = Dictionary(uniqueKeysWithValues: members.enumerated().map { ($0.element.id, $0.offset + 1) })
         let current = choice(group: group, members: members)
         let shown = ordered(members, ratings: ratings)
+        // Pochi scatti si giudicano meglio grandi: due colonne invece di tre.
+        let isSmallGroup = members.count <= 4
         return SelectableGrid(
             items: shown,
             selection: deletionBinding(current, memberIDs: members.map { $0.id }),
             isSelecting: true,
             minimumCellSide: 105,
+            columns: isSmallGroup ? 2 : nil,
+            spacing: isSmallGroup ? 6 : 3,
             onOpen: { item in openPreview(item, among: shown) },
             onExpand: { item in openPreview(item, among: shown) },
             header: {
@@ -262,6 +293,7 @@ struct GroupSelectionView: View {
                     isLocked: current.locked.contains(item.id),
                     isSuggested: item.id == group.suggestedKeepID,
                     grade: item.isImage ? ratings[item.id]?.grade : nil,
+                    pointSide: isSmallGroup ? 240 : 170,
                     onExpand: { openPreview(item, among: shown) }
                 )
                 .contextMenu {
@@ -296,6 +328,7 @@ struct GroupSelectionView: View {
                 if !newValue.intersection(current.locked).isEmpty {
                     toast = "Gli elementi protetti non si possono eliminare."
                 }
+                freeze(current)
                 overrides = GroupProposal.overrides(
                     for: newValue.subtracting(current.locked),
                     proposal: current.proposal,
@@ -448,10 +481,13 @@ struct GroupSelectionView: View {
             title = "Scarta \(deleting.count) · \(Format.bytes(bytes))"
         }
         return Button {
-            if deletesDirectly {
+            if !deletesDirectly {
+                proposeForReview(deletion: Set(deleting.map { $0.id }))
+            } else if env.needsInAppConfirmation(deleting) {
                 confirmsDeletion = true
             } else {
-                proposeForReview(deletion: Set(deleting.map { $0.id }))
+                // Per foto e video basta la conferma di iOS, che mostra quante ne verranno eliminate.
+                performDeletion(members: members, deletion: Set(deleting.map { $0.id }))
             }
         } label: {
             Group {
@@ -550,7 +586,7 @@ struct GroupSelectionView: View {
                 }
                 Button {
                     env.recordTutorial(.quickSelect)
-                    overrides.removeAll()
+                    resetChoices()
                 } label: {
                     Label("Ripristina la proposta", systemImage: "arrow.counterclockwise")
                 }
@@ -685,6 +721,7 @@ struct GroupSelectionView: View {
     private func setDeletion(_ deletes: Bool, for item: IndexedItem) {
         guard let group else { return }
         let current = choice(group: group, members: members)
+        freeze(current)
         var next = current.deletion
         if deletes {
             next.insert(item.id)
@@ -702,6 +739,7 @@ struct GroupSelectionView: View {
     private func markAll(_ items: [IndexedItem]) {
         guard let group else { return }
         let current = choice(group: group, members: items)
+        freeze(current)
         overrides = GroupProposal.overrides(
             for: Set(items.map { $0.id }),
             proposal: current.proposal,
@@ -730,7 +768,7 @@ struct GroupSelectionView: View {
     private func keepAll(_ items: [IndexedItem]) {
         guard !items.isEmpty else { return }
         env.sessions.decideGroup(keep: items.map { $0.id }, delete: [])
-        overrides.removeAll()
+        resetChoices()
         finish(GroupDecision(message: "Tutti gli elementi del gruppo sono stati conservati."))
     }
 
@@ -748,7 +786,7 @@ struct GroupSelectionView: View {
     private func proposeForReview(deletion: Set<UUID>) {
         let split = GroupProposal.split(memberIDs: members.map { $0.id }, deletion: deletion)
         let result = env.sessions.decideGroup(keep: split.keep, delete: split.delete)
-        overrides.removeAll()
+        resetChoices()
         var message = "\(Format.plural(result.applied, "elemento aggiunto", "elementi aggiunti")) alla revisione."
         if result.blocked > 0 {
             message += " \(Format.plural(result.blocked, "protetto saltato", "protetti saltati"))."
@@ -762,60 +800,25 @@ struct GroupSelectionView: View {
         let split = GroupProposal.split(memberIDs: members.map { $0.id }, deletion: deletion)
         guard !split.delete.isEmpty, !isDeleting else { return }
         isDeleting = true
-        let previous = members.map { (id: $0.id, status: $0.reviewStatus) }
         let isImageGroup = members.first?.isImage ?? false
         let isVideoGroup = members.first?.isVideo ?? false
-        let result = env.sessions.decideGroup(keep: split.keep, delete: split.delete)
-        let accepted = split.delete.filter { env.store.item($0)?.reviewStatus.isQueuedForDeletion == true }
         Task {
-            let report = await env.deleteNow(accepted)
+            let result = await env.deleteDirectly(keep: split.keep, delete: split.delete)
             isDeleting = false
-            guard let report else {
-                restore(previous)
-                toast = "Non è stato possibile eliminare: controlla protezioni e permessi."
-                return
-            }
-            if report.systemDialogDeclined {
-                restore(previous)
+            switch result.outcome {
+            case .cancelled:
                 toast = "Eliminazione annullata: non è stato eliminato nulla."
-                return
+            case .nothing:
+                toast = result.note ?? "Non è stato eliminato nulla."
+            case .deleted:
+                deletionsDone += 1
+                resetChoices()
+                finish(GroupDecision(
+                    message: result.summary(isImage: isImageGroup, isVideo: isVideoGroup),
+                    deletedCount: result.deletedCount,
+                    freedBytes: result.freedBytes
+                ))
             }
-            let deleted = report.deletedCount
-            let freed = report.outcomes
-                .filter { $0.state == .deleted }
-                .reduce(Int64(0)) { $0 + $1.deviceBytes }
-            guard deleted > 0 else {
-                toast = report.note ?? "Non è stato eliminato nulla: gli elementi non riusciti sono nella Revisione."
-                return
-            }
-            var message = Self.deletedPhrase(deleted, isImage: isImageGroup, isVideo: isVideoGroup)
-            if report.failedCount > 0 {
-                message += " \(Format.plural(report.failedCount, "non è riuscito", "non sono riusciti")): li trovi nella Revisione."
-            }
-            if result.blocked > 0 {
-                message += " \(Format.plural(result.blocked, "protetto è rimasto", "protetti sono rimasti"))."
-            }
-            overrides.removeAll()
-            finish(GroupDecision(message: message, deletedCount: deleted, freedBytes: freed))
-        }
-    }
-
-    /// "Eliminate 3 foto." / "Eliminato 1 video."
-    private static func deletedPhrase(_ count: Int, isImage: Bool, isVideo: Bool) -> String {
-        if isImage {
-            return count == 1 ? "Eliminata 1 foto." : "Eliminate \(count) foto."
-        }
-        if isVideo {
-            return count == 1 ? "Eliminato 1 video." : "Eliminati \(count) video."
-        }
-        return count == 1 ? "Eliminato 1 elemento." : "Eliminati \(count) elementi."
-    }
-
-    /// Rimette lo stato di revisione che gli elementi avevano prima della scelta.
-    private func restore(_ previous: [(id: UUID, status: ReviewStatus)]) {
-        let grouped = Dictionary(grouping: previous, by: { $0.status })
-        for (status, entries) in grouped {
-            env.store.setReviewStatus(status, for: entries.map { $0.id })
         }
     }
 
@@ -842,10 +845,12 @@ private struct GroupGridCell: View {
     let isLocked: Bool
     let isSuggested: Bool
     let grade: Int?
+    /// Lato dell'anteprima da preparare: più grande quando le colonne sono due.
+    let pointSide: CGFloat
     let onExpand: () -> Void
 
     var body: some View {
-        ItemThumbnailView(item: item, pointSide: 170)
+        ItemThumbnailView(item: item, pointSide: pointSide)
             .overlay {
                 // Ciò che verrà eliminato appare spento.
                 if deletes {

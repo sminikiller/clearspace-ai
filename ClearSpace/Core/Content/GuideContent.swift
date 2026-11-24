@@ -135,7 +135,7 @@ enum GuideBook {
                 ]),
                 section("La regola d'oro: decidi sempre tu", [
                     "Nessun gesto elimina da solo. Negli swipe e nelle griglie proporre un elemento significa metterlo nella lista della scheda Revisione.",
-                    "Si elimina dalla Revisione oppure con «Elimina» nella galleria di un gruppo: prima una conferma di ClearSpace che dice cosa succede su iPhone e su iCloud, poi quella di iOS per foto e video. Foto e video eliminati restano 30 giorni in «Eliminati di recente»."
+                    "Si elimina dalla Revisione oppure con «Elimina» nella galleria di un gruppo, nella schermata «Tutti i gruppi» e nelle griglie dopo «Seleziona». Per foto e video conferma iOS, con un avviso che dice quanti elementi verranno eliminati; per file, contenuti che potrebbero essere importanti e selezioni molto grandi chiede prima anche ClearSpace, con lo spazio e gli effetti su iCloud. Foto e video eliminati restano 30 giorni in «Eliminati di recente»."
                 ], points: [
                     "Puoi annullare ogni scelta prima della conferma finale.",
                     "Le foto eliminate restano per 30 giorni in Eliminati di recente dell'app Foto.",
@@ -147,7 +147,7 @@ enum GuideBook {
                     "Subito dopo parte l'analisi: puoi usare l'app mentre lavora, i risultati compaiono man mano."
                 ], tip: "Puoi rivedere l'introduzione da Impostazioni → Rivedi l'introduzione: l'analisi non riparte."),
                 section("Le cinque schede", points: [
-                    "Home: spazio occupato, spazio recuperabile, pulizia rapida, modalità di pulizia e categorie.",
+                    "Home: ciò che aspetta la conferma, lo spazio recuperabile, da dove iniziare, la pulizia rapida, lo spazio del telefono, le categorie e le modalità di pulizia.",
                     "Analizza: stato e fasi dell'analisi, opzioni di download e batteria.",
                     "Esplora: tutte le categorie, la ricerca, l'archivio per anno, i viaggi, i ricordi, iCloud e l'assistente per le altre app.",
                     "Revisione: la lista di ciò che hai proposto, con il numero di elementi in attesa sull'icona.",
@@ -168,31 +168,35 @@ enum GuideBook {
             id: "home",
             title: "La Home",
             systemImage: "house",
-            summary: "Spazio occupato, spazio recuperabile e da dove partire.",
+            summary: "Spazio recuperabile, da dove iniziare e spazio occupato.",
             sections: [
+                section("L'ordine della Home", [
+                    "In alto c'è ciò che puoi fare subito: gli elementi che aspettano la conferma, quanto spazio potresti liberare e da dove iniziare. Più in basso lo spazio del telefono, le categorie, le modalità di pulizia e la guida."
+                ]),
                 section("iPhone e iCloud", [
                     "Il riquadro iPhone mostra lo spazio usato e il totale del telefono, con una barra.",
                     "Il riquadro iCloud mostra quanto pesano le foto e i video analizzati. iOS non permette alle app di leggere il totale del tuo piano iCloud: se vuoi vederlo qui, inseriscilo nel Centro iCloud e comparirà con la dicitura «inserito da te»."
                 ]),
                 section("Spazio potenzialmente recuperabile", [
-                    "È una stima sui contenuti analizzati, non spazio già liberato. È divisa in tre voci: foto duplicate e simili, video ingombranti, screenshot e documenti.",
-                    "Per i gruppi di duplicati e simili conta solo le copie in più, mai l'elemento che conviene tenere. Mentre l'analisi è in corso la stima può crescere."
+                    "È una stima sui contenuti analizzati, non spazio già liberato: comprende foto duplicate e simili, video ingombranti, screenshot e documenti.",
+                    "Per i gruppi di duplicati e simili conta solo le copie in più, mai l'elemento che conviene tenere. Mentre l'analisi è in corso la stima può crescere.",
+                    "Se la libreria non è ancora stata analizzata, qui compare «Analizza la libreria»."
                 ]),
-                section("Pulizia rapida", [
+                section("Da dove iniziare", [
+                    "Sotto la stima trovi fino a cinque posti in cui c'è più spazio da liberare, dal più ingombrante: Foto simili, Foto duplicate, Video grandi, Screenshot vecchi, Foto sfocate, Registrazioni dello schermo. Ogni riga dice quanti elementi restano da decidere e quanto pesano, e porta direttamente al lavoro: l'elenco dei gruppi oppure la griglia."
+                ], tip: "Per le foto simili la strada più veloce è «Tieni la migliore in tutti i gruppi», in cima all'elenco dei gruppi."),
+                section("Pulizia rapida con gli swipe", [
                     "«Avvia pulizia intelligente» apre lo swipe con gli elementi che conviene rivedere per primi: duplicati certi, video grandi, screenshot vecchi e così via, nell'ordine «Consigliati».",
                     "«Scegli quanti elementi rivedere» decide la lunghezza della sessione: 25, 50, 100 o 200 elementi."
                 ]),
                 section("Pronto da liberare", [
-                    "Se hai proposto qualcosa per l'eliminazione ma non hai ancora confermato, sotto lo spazio recuperabile compare questa scheda: quanti elementi e quanto spazio aspettano nella Revisione. «Apri la Revisione» ti porta lì. Finché non confermi non viene eliminato nulla."
-                ]),
-                section("Scegli le foto migliori", [
-                    "Se ci sono gruppi di foto simili ancora da decidere compare questa scheda: apre subito i gruppi uno dopo l'altro, a partire da quello che libera più spazio. In ogni gruppo tieni la migliore e compare da solo il gruppo successivo (vedi il capitolo sulla galleria)."
+                    "Se hai proposto qualcosa per l'eliminazione ma non hai ancora confermato, in cima alla Home compare questa scheda: quanti elementi e quanto spazio aspettano nella Revisione. «Apri la Revisione» ti porta lì. Finché non confermi non viene eliminato nulla."
                 ]),
                 section("Riprendi da dove eri rimasto", [
                     "Se chiudi uno swipe a metà, la sessione viene salvata. «Riprendi» la riapre dall'elemento in cui eri; «Scarta sessione» la cancella (le scelte già fatte restano)."
                 ]),
                 section("Modalità e categorie", [
-                    "In basso trovi le modalità di pulizia (guidata, avanzata, per obiettivo, annuale) e le scorciatoie alle categorie Foto, Video, Documenti e iCloud Drive, con quanti elementi e quanto spazio contengono."
+                    "In basso trovi le scorciatoie alle categorie Foto, Video, Documenti e iCloud Drive, con quanti elementi e quanto spazio contengono, e le modalità di pulizia (guidata, avanzata, per obiettivo, annuale)."
                 ])
             ],
             tutorialID: "modes",
@@ -386,31 +390,39 @@ enum GuideBook {
             sections: [
                 section("Come si apre", points: [
                     "Esplora → Foto → Foto simili (o Foto duplicate) → tocca un gruppo.",
-                    "Dalla Home: «Scegli le foto migliori» apre i gruppi uno dopo l'altro.",
+                    "Dalla Home: «Foto simili» (o «Foto duplicate») in «Da dove iniziare» apre l'elenco dei gruppi.",
                     "Nello swipe: «Griglia» sopra la striscia.",
                     "Nel confronto: il pulsante con i quadratini in alto."
                 ]),
                 section("L'elenco dei gruppi", points: [
                     "Prima vengono i gruppi ancora da decidere, da quello che libera più spazio; quelli in cui ogni foto è già conservata, proposta o protetta finiscono in fondo con l'etichetta «Deciso».",
-                    "In cima, «Decidi un gruppo dopo l'altro» dice quanti gruppi restano e quanto spazio potresti liberare. Se sono tutti decisi diventa «Rivedi i gruppi uno dopo l'altro», per ricontrollarli."
+                    "In cima, «Tieni la migliore in tutti i gruppi» apre tutti i gruppi da decidere in una schermata; sotto, «Decidi un gruppo dopo l'altro» li apre uno alla volta e dice quanti restano e quanto spazio potresti liberare. Se sono tutti decisi diventa «Rivedi i gruppi uno dopo l'altro», per ricontrollarli.",
+                    "Mentre guardi l'elenco i gruppi restano al loro posto, anche se l'analisi è in corso: l'ordine si aggiorna quando lo riapri."
                 ]),
+                section("Tutti i gruppi in una volta", [
+                    "«Tieni la migliore in tutti i gruppi» mostra ogni gruppo ancora da decidere con le sue foto: quella che resta (la tua stella o la consigliata) ha il segno verde, le altre il cestino.",
+                    "Il cerchio a sinistra esclude o rimette un gruppo; un tocco sulle foto apre la galleria del gruppo per cambiare le scelte, e al ritorno il gruppo deciso esce dall'elenco.",
+                    "In basso leggi quante foto si eliminano e in quanti gruppi. «Elimina» le elimina tutte insieme con una sola conferma di iOS; «Aggiungi alla Revisione» le mette in lista senza eliminarle. Se annulli l'avviso di iOS non cambia nulla.",
+                    "I gruppi senza stelle e senza consiglio non vengono proposti: lì la scelta va fatta a mano, dalla galleria."
+                ], tip: "È il modo più rapido quando i gruppi sono tanti: scorri l'elenco, escludi quelli dubbi ed elimina il resto in un colpo."),
                 section("Un gruppo dopo l'altro", [
                     "Si apre la galleria del primo gruppo da decidere, con «Gruppo 1 di N» in alto e una barra di avanzamento. Dopo «Elimina» (o «Tieni tutte») compare da solo il gruppo successivo.",
                     "«Salta», in alto a destra, lascia il gruppo da decidere e passa al prossimo. Se hai già deciso tutte le foto una per una, il pulsante diventa «Avanti».",
                     "Alla fine un riepilogo dice quanti gruppi hai deciso, quanti saltato e quante foto hai eliminato, con «Apri l'app Foto» per svuotare «Eliminati di recente». Funziona anche per i video simili e per i duplicati."
                 ], tip: "È il modo più veloce per sistemare tante foto simili: in ogni gruppo bastano uno sguardo al consiglio e un tocco su «Elimina»."),
                 section("La scelta già pronta", [
-                    "All'apertura la migliore resta e le altre sono da eliminare: la migliore è quella con la tua stella oppure, se non ne hai messe, quella consigliata (con le scintille). Ciò che avevi già deciso resta com'era.",
+                    "All'apertura la migliore resta e le altre sono da eliminare: la migliore è quella con la tua stella oppure, se non ne hai messe, quella consigliata (con le scintille). Ciò che avevi già deciso resta com'era. Dal primo tocco le tue scelte non cambiano più da sole, anche se il consiglio si aggiorna.",
+                    "Nei gruppi fino a quattro scatti le anteprime sono su due colonne, abbastanza grandi da giudicarle senza aprirle.",
                     "Ogni foto ha un solo segno, in basso a destra: verde = resta, cestino rosso = si elimina, lucchetto = protetta. Le foto da eliminare appaiono più scure."
                 ], points: [
                     "Un tocco cambia la scelta di una foto.",
-                    "Trascina il dito in orizzontale per cambiare tante foto insieme, anche scendendo su più righe; vicino ai bordi la griglia scorre da sola.",
-                    "Un gesto verticale o in diagonale fa sempre scorrere la griglia, anche se è ancora in movimento.",
+                    "Trascina il dito di lato, partendo da una foto, per cambiare tante foto insieme, anche scendendo poi su più righe; vicino ai bordi la griglia scorre da sola, più veloce quanto più il dito è vicino al bordo.",
+                    "Un gesto verticale o in diagonale fa sempre scorrere la griglia, anche se è ancora in movimento: la decisione si prende nei primi millimetri, prima che la griglia si muova, e una selezione non può bloccare lo scorrimento.",
                     "Le frecce in alto a destra di ogni anteprima la aprono a tutto schermo: lì scorri di lato tra tutte le foto del gruppo."
                 ]),
                 section("Elimina", [
-                    "In basso leggi «N da eliminare · M da tenere». «Elimina N» chiede una conferma con lo spazio liberato e gli effetti su iCloud, poi iOS chiede la sua: le foto vanno in «Eliminati di recente», dove restano 30 giorni.",
-                    "«Tieni tutte» conserva tutto il gruppo. Se annulli l'avviso di iOS non cambia nulla."
+                    "In basso leggi «N da eliminare · M da tenere». «Elimina N» elimina subito: per foto e video conferma iOS, con un avviso che dice quante ne verranno eliminate; le foto vanno in «Eliminati di recente», dove restano 30 giorni. Per file e contenuti che potrebbero essere importanti ClearSpace chiede prima anche la sua conferma, con lo spazio e gli effetti su iCloud.",
+                    "«Tieni tutte» conserva tutto il gruppo. Se annulli l'avviso di iOS non cambia nulla. Quando l'eliminazione riesce il telefono vibra leggermente."
                 ], tip: "Aperta dallo swipe, la galleria segue le regole della sessione: il pulsante diventa «Scarta N», le foto scartate passano alla Revisione e la galleria si chiude da sola."),
                 section("In alto e nel menu", points: [
                     "Il consiglio con il motivo e «Confronta» per vedere le foto in grande, una accanto all'altra.",
@@ -535,12 +547,13 @@ enum GuideBook {
                     "Tocca un'anteprima per aprirla a tutto schermo: scorri di lato per passare alle altre."
                 ]),
                 section("La selezione", points: [
-                    "Tocca o trascina il dito in orizzontale per selezionare più elementi, come in Foto. Un gesto verticale o in diagonale fa sempre scorrere la griglia.",
+                    "Tocca o trascina il dito di lato, partendo da un'anteprima, per selezionare più elementi, come in Foto. Un gesto verticale o in diagonale fa sempre scorrere la griglia.",
                     "Seleziona tutto / Deseleziona tutto.",
-                    "Da eliminare: propone le selezionate (le protette vengono saltate e il messaggio lo dice).",
+                    "«Elimina N»: elimina subito le selezionate. Per foto e video conferma iOS; per file, contenuti importanti o più di 100 elementi chiede prima anche ClearSpace. Le protette vengono saltate.",
+                    "Revisione: aggiunge le selezionate alla lista della scheda Revisione, senza eliminarle.",
                     "Conserva e Proteggi.",
                     "«Fine» esce dalla selezione."
-                ], tip: "Nelle griglie molto lunghe gli elementi successivi arrivano da soli mentre scorri.")
+                ], tip: "Nelle griglie molto lunghe gli elementi successivi arrivano da soli mentre scorri. Durante l'analisi la griglia non si riordina sotto il dito: i nuovi elementi arrivano in fondo.")
             ],
             tutorialID: "explore",
             destination: .allPhotos

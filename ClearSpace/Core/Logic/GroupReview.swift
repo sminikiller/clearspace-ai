@@ -147,3 +147,71 @@ enum GroupProposal {
         return (keep, delete)
     }
 }
+
+/// Più gruppi decisi insieme: in ognuno resta la migliore (le stelle dell'utente o la consigliata) e
+/// le altre si eliminano in un colpo solo. È la proposta della galleria (`GroupProposal`) applicata a
+/// ogni gruppo: qui si calcola soltanto, nulla viene deciso o eliminato.
+enum GroupBatch {
+
+    /// Gruppo da considerare: i suoi membri, nell'ordine del gruppo, e lo scatto consigliato.
+    struct Candidate {
+        let groupID: UUID
+        let members: [IndexedItem]
+        let suggestedID: UUID?
+    }
+
+    /// Cosa succede a un gruppo: quali membri restano e quali si eliminano.
+    struct Plan: Identifiable, Equatable, Sendable {
+        let groupID: UUID
+        let keep: [UUID]
+        let delete: [UUID]
+        /// Spazio occupato dagli elementi da eliminare.
+        let deleteBytes: Int64
+
+        var id: UUID { groupID }
+    }
+
+    struct Totals: Equatable, Sendable {
+        var groups = 0
+        var items = 0
+        var bytes: Int64 = 0
+    }
+
+    /// Un piano per ogni gruppo ancora da decidere in cui la proposta elimina qualcosa. Restano fuori i
+    /// gruppi senza elementi da decidere, quelli senza stelle e senza consiglio (lì si sceglie a mano) e
+    /// quelli in cui tutto ciò che si potrebbe eliminare è protetto.
+    static func plans(for candidates: [Candidate], isLocked: (IndexedItem) -> Bool) -> [Plan] {
+        var result: [Plan] = []
+        for candidate in candidates {
+            let hasPending = candidate.members.contains { member in
+                !isLocked(member) && (member.reviewStatus == .unreviewed || member.reviewStatus == .postponed)
+            }
+            guard hasPending, candidate.members.count >= 2 else { continue }
+            let deletion = GroupProposal.initialDeletion(
+                members: candidate.members,
+                suggestedID: candidate.suggestedID,
+                isLocked: isLocked
+            )
+            guard !deletion.isEmpty else { continue }
+            let split = GroupProposal.split(memberIDs: candidate.members.map { $0.id }, deletion: deletion)
+            // Almeno uno resta sempre: un gruppo non si svuota mai per intero.
+            guard !split.keep.isEmpty else { continue }
+            let bytes = candidate.members
+                .filter { deletion.contains($0.id) }
+                .reduce(Int64(0)) { $0 + $1.bytes }
+            result.append(Plan(groupID: candidate.groupID, keep: split.keep, delete: split.delete, deleteBytes: bytes))
+        }
+        return result
+    }
+
+    /// Totali dei piani inclusi: gruppi, elementi da eliminare e spazio.
+    static func totals(_ plans: [Plan], excluding excluded: Set<UUID>) -> Totals {
+        var totals = Totals()
+        for plan in plans where !excluded.contains(plan.groupID) {
+            totals.groups += 1
+            totals.items += plan.delete.count
+            totals.bytes += plan.deleteBytes
+        }
+        return totals
+    }
+}

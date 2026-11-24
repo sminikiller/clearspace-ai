@@ -17,17 +17,19 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
+                // Prima ciò che si può fare subito: quello che aspetta la conferma, quanto si può liberare e
+                // da dove iniziare. Poi lo spazio del telefono, gli altri modi di pulire e la guida.
                 VStack(spacing: Theme.spacing) {
                     accessBanner
-                    storageCards
-                    potentialCard
                     pendingDeletionCard
-                    quickCleanupCard
-                    similarShortcutCard
+                    potentialCard
+                    startSection
                     resumeCard
+                    quickCleanupCard
+                    storageCards
+                    categoriesSection
                     modesSection
                     guideCard
-                    categoriesSection
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
@@ -174,11 +176,20 @@ struct HomeView: View {
                 .font(.caption)
                 .opacity(0.85)
 
-            Divider().overlay(.white.opacity(0.4))
-
-            potentialRow("Foto duplicate e simili", summary.potential.photoDuplicatesAndSimilar)
-            potentialRow("Video ingombranti", summary.potential.bulkyVideos)
-            potentialRow("Screenshot e documenti", summary.potential.screenshotsAndDocuments)
+            if summary.totalCount == 0 && !env.scan.isRunning && env.photos.canRead {
+                // Al primo avvio, o se l'analisi non è mai partita: il primo passo è uno solo.
+                Button {
+                    env.recordTutorial(.startScan)
+                    env.scan.start(deep: true)
+                } label: {
+                    Label("Analizza la libreria", systemImage: "magnifyingglass")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .tint(.white)
+                .controlSize(.large)
+                .accessibilityIdentifier("home.startScan")
+            }
 
             if env.scan.isRunning {
                 HStack(spacing: 8) {
@@ -197,17 +208,8 @@ struct HomeView: View {
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.heroGradient, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .accessibilityElement(children: .combine)
-    }
-
-    private func potentialRow(_ title: String, _ bytes: Int64) -> some View {
-        HStack {
-            Text(title)
-                .font(.subheadline)
-            Spacer()
-            Text(Format.bytes(bytes))
-                .font(.subheadline.weight(.semibold))
-        }
+        // Con VoiceOver il pulsante «Analizza la libreria» resta un pulsante a sé, non una parte del testo.
+        .accessibilityElement(children: .contain)
     }
 
     // MARK: - In attesa di conferma
@@ -249,16 +251,13 @@ struct HomeView: View {
     // MARK: - Pulizia rapida
 
     private var quickCleanupCard: some View {
-        let recommendations = RecommendationEngine.recommendations(summary: summary, learner: env.history.learner)
-        return VStack(alignment: .leading, spacing: 12) {
-            Label("Pulizia rapida", systemImage: "bolt.fill")
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Pulizia rapida con gli swipe", systemImage: "bolt.fill")
                 .font(.headline)
-            Text(RecommendationEngine.headline(for: recommendations, hasIndexedContent: summary.totalCount > 0))
+            Text("Ti mostro per primi gli elementi che liberano più spazio: verso sinistra li scarti, verso destra li tieni. Nulla si elimina senza la tua conferma.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            Text("Rivedi per primi gli elementi con maggiore potenziale di recupero, senza cancellazioni automatiche.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             Button {
                 startQuickCleanup()
@@ -283,40 +282,86 @@ struct HomeView: View {
         .card()
     }
 
-    /// Scorciatoia verso i gruppi di foto simili ancora da decidere: è lì che si recupera spazio
-    /// tenendo solo lo scatto migliore.
-    @ViewBuilder
-    private var similarShortcutCard: some View {
-        let stat = summary.stat(.similarPhotos)
-        if stat.reviewableCount > 0 {
-            // Si entra subito nei gruppi da decidere, uno dopo l'altro: è il modo più rapido.
-            NavigationLink {
-                GroupSequenceView(collection: .similarPhotos)
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "square.stack.3d.down.right.fill")
-                        .font(.title2)
-                        .foregroundStyle(Color.accentColor)
-                        .frame(width: 34)
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Scegli le foto migliori")
-                            .font(.headline)
-                        Text("\(Format.plural(stat.reviewableCount, "scatto simile", "scatti simili")) da decidere: un gruppo dopo l'altro, tieni il migliore.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 4)
-                    Image(systemName: "chevron.right")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                        .accessibilityHidden(true)
-                }
-                .card(padding: 14)
-                .contentShape(Rectangle())
+    // MARK: - Da dove iniziare
+
+    /// Un posto da cui liberare spazio: una categoria con ciò che resta da decidere.
+    private struct StartPoint: Identifiable {
+        let collection: SmartCollection
+        let title: String
+        let detail: String
+        let systemImage: String
+        let tint: Color
+        let stat: CollectionStat
+
+        var id: String { collection.rawValue }
+    }
+
+    /// Le categorie che di solito liberano più spazio, con qualcosa ancora da decidere, dalla più
+    /// ingombrante. Ogni riga porta direttamente al lavoro: i gruppi o la griglia.
+    private var startPoints: [StartPoint] {
+        let candidates: [(SmartCollection, String, String, String, Color)] = [
+            (.similarPhotos, "Foto simili", "Tieni il migliore di ogni scatto", "square.stack.3d.down.right.fill", Theme.keep),
+            (.duplicatePhotos, "Foto duplicate", "Copie della stessa foto", "square.on.square", Theme.info),
+            (.largeVideos, "Video grandi", "I video che occupano più spazio", "video.fill", Theme.later),
+            (.oldScreenshots, "Screenshot vecchi", "Schermate di più di un anno fa", "camera.viewfinder", Color.accentColor),
+            (.blurryPhotos, "Foto sfocate", "Mosse o fuori fuoco", "camera.metering.unknown", Theme.remove),
+            (.screenRecordings, "Registrazioni dello schermo", "Riprese dello schermo dell'iPhone", "record.circle", Theme.remove)
+        ]
+        return candidates
+            .map { collection, title, detail, image, tint in
+                StartPoint(collection: collection, title: title, detail: detail, systemImage: image, tint: tint, stat: summary.stat(collection))
             }
-            .buttonStyle(.plain)
+            .filter { $0.stat.reviewableCount > 0 }
+            .sorted { $0.stat.reviewableBytes > $1.stat.reviewableBytes }
+            .prefix(5)
+            .map { $0 }
+    }
+
+    @ViewBuilder
+    private var startSection: some View {
+        let points = startPoints
+        if !points.isEmpty {
+            VStack(spacing: 10) {
+                SectionHeader(title: "Da dove iniziare", subtitle: "Dove c'è più spazio da liberare")
+                ForEach(points) { point in
+                    NavigationLink {
+                        CollectionDestination(collection: point.collection)
+                    } label: {
+                        startRow(point)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("home.start.\(point.collection.rawValue)")
+                }
+            }
         }
+    }
+
+    private func startRow(_ point: StartPoint) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: point.systemImage)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 42, height: 42)
+                .background(point.tint.gradient, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(point.title)
+                    .font(.headline)
+                Text(point.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("\(Format.plural(point.stat.reviewableCount, "da decidere", "da decidere")) · \(Format.bytes(point.stat.reviewableBytes))")
+                    .font(.subheadline.weight(.semibold))
+            }
+            Spacer(minLength: 4)
+            Image(systemName: "chevron.right")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
+        }
+        .card(padding: 14)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder
