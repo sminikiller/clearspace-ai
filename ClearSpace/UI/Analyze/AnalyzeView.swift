@@ -9,7 +9,7 @@ struct AnalyzeView: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            ReadableList {
                 statusSection
                 phasesSection
                 indexedSection

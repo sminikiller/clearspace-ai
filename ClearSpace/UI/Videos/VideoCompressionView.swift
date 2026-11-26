@@ -45,7 +45,7 @@ struct VideoCompressionView: View {
     @ViewBuilder
     private var content: some View {
         if let item = env.store.item(itemID) {
-            List {
+            ReadableList {
                 Section {
                     InfoBanner(
                         text: "La compressione è facoltativa e può ridurre la qualità. Non garantisce un risparmio su ogni video: confronta il risultato prima di salvarlo.",

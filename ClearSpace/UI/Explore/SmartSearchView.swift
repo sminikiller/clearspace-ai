@@ -29,7 +29,7 @@ struct SmartSearchView: View {
     }
 
     private var content: some View {
-        List {
+        ReadableList {
             Section {
                 HStack {
                     Image(systemName: "sparkle.magnifyingglass")

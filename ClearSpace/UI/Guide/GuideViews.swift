@@ -104,7 +104,7 @@ struct GuideHubView: View {
 
     var body: some View {
         let _ = env.history.checklist.count
-        List {
+        ReadableList {
             if query.isEmpty {
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
@@ -199,7 +199,7 @@ struct GuideChapterView: View {
     @Environment(AppEnvironment.self) private var env
 
     var body: some View {
-        List {
+        ReadableList {
             Section {
                 Label {
                     Text(chapter.summary)
@@ -217,14 +217,7 @@ struct GuideChapterView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     ForEach(Array(section.points.enumerated()), id: \.offset) { _, point in
-                        Label {
-                            Text(point)
-                                .fixedSize(horizontal: false, vertical: true)
-                        } icon: {
-                            Image(systemName: "circle.fill")
-                                .font(.system(size: 6))
-                                .foregroundStyle(Color.accentColor)
-                        }
+                        BulletText(text: point)
                     }
                     if let tip = section.tip {
                         InfoBanner(text: tip, systemImage: "lightbulb.fill", tint: Theme.later)
@@ -266,7 +259,7 @@ struct TutorialListView: View {
 
     var body: some View {
         let _ = env.history.checklist.count
-        List {
+        ReadableList {
             Section {
                 Text("Ogni tutorial ha esercizi da fare davvero nell'app. Quelli con l'icona della bacchetta si spuntano da soli appena compi l'azione; gli altri li segni tu quando li hai provati.")
                     .font(.subheadline)
@@ -325,7 +318,7 @@ struct TutorialDetailView: View {
     var body: some View {
         let _ = env.history.checklist.count
         let progress = env.tutorialProgress(tutorial)
-        List {
+        ReadableList {
             Section {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(tutorial.goal)

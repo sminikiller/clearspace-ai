@@ -43,7 +43,7 @@ final class SmokeTests: UITestCase {
             return
         }
         similar.tap()
-        let groupRow = element(containing: "potenziali")
+        let groupRow = app.descendants(matching: .any).matching(identifier: "groups.row").firstMatch
         guard groupRow.waitForExistence(timeout: 20) else {
             capture("40-nessun-gruppo")
             XCTFail("Le tre foto di prova non sono state riconosciute come simili")
@@ -109,27 +109,30 @@ final class SmokeTests: UITestCase {
             capture("44-confronto-zoom-terza-foto")
         }
 
-        // Tieni solo la tua migliore (quella con la stella): le altre passano alla revisione,
-        // nulla viene eliminato
+        // Tieni solo la tua migliore (quella con la stella): il confronto si chiude e la galleria mostra
+        // la scelta, con le altre due pronte per «Elimina». Nulla viene eliminato.
         let keepBest = app.buttons["Tieni solo la tua migliore"]
         XCTAssertTrue(keepBest.waitForExistence(timeout: 5), "Manca il pulsante per tenere la foto con la stella")
         keepBest.tap()
         XCTAssertTrue(
-            element(containing: "alla revisione").waitForExistence(timeout: 6),
-            "La scelta sul gruppo non è stata registrata"
+            waitForLabel(counter, "2 da eliminare · 1 da tenere", timeout: 8),
+            "Dopo la scelta nel confronto la galleria non mostra le due foto da eliminare (\(counter.label))"
+        )
+        XCTAssertTrue(
+            element(containing: "Scelta applicata").waitForExistence(timeout: 4),
+            "Al ritorno dal confronto manca il messaggio sulla scelta"
         )
         capture("45-migliore-tenuta")
 
         // Si rimette tutto com'era: le tre foto vengono conservate
-        let keepAll = app.buttons["Tieni tutte"]
+        let keepAll = app.buttons["group.keepAll"]
         XCTAssertTrue(keepAll.waitForExistence(timeout: 5), "Manca il pulsante per tenerle tutte")
         keepAll.tap()
         XCTAssertTrue(
             element(containing: "sono stati conservati").waitForExistence(timeout: 6),
             "Le foto non sono state riportate tra quelle conservate"
         )
-        // Confronto → galleria → gruppi → categorie delle foto → Esplora
-        goBack()
+        // Galleria → gruppi → categorie delle foto → Esplora
         goBack()
         goBack()
         goBack()

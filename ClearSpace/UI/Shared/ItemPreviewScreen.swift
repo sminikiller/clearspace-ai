@@ -153,9 +153,7 @@ struct ItemPreviewScreen: View {
                 let result = env.safety.apply(.delete, to: item.id)
                 handle(result)
             } label: {
-                Label("Da eliminare", systemImage: "trash")
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+                ButtonTitle("Da eliminare", systemImage: "trash")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
@@ -165,9 +163,7 @@ struct ItemPreviewScreen: View {
                 env.safety.apply(.keep, to: item.id)
                 advanceOrDismiss()
             } label: {
-                Label("Conserva", systemImage: "checkmark")
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+                ButtonTitle("Conserva", systemImage: "checkmark")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)

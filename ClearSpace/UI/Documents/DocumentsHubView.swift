@@ -21,7 +21,7 @@ struct DocumentsHubView: View {
     }
 
     private var content: some View {
-        List {
+        ReadableList {
             Section {
                 ForEach(env.folders.folders) { folder in
                     folderRow(folder)
@@ -170,7 +170,7 @@ struct EvictLocalCopiesView: View {
     }
 
     var body: some View {
-        List {
+        ReadableList {
             Section {
                 InfoBanner(text: "Questa operazione rimuove dall'iPhone solo la copia scaricata. Il file resta in iCloud Drive e si riscarica quando lo apri. Non è un'eliminazione.")
             }
@@ -191,7 +191,8 @@ struct EvictLocalCopiesView: View {
                                 .foregroundStyle(selection.contains(item.id) ? Color.accentColor : Color.secondary)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(item.displayTitle)
-                                    .lineLimit(1)
+                                    .lineLimit(2)
+                                    .truncationMode(.middle)
                                     .foregroundStyle(.primary)
                                 Text("\(item.category.title) · \(Format.bytes(item.deviceBytes))")
                                     .font(.caption)

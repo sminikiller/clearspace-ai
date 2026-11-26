@@ -75,6 +75,21 @@ final class ShotQualityTests: XCTestCase {
         XCTAssertFalse(texts.contains("Occhi aperti"))
     }
 
+    func testTheMainWarningNamesTheVisibleDefect() {
+        let closedEyes = photo(
+            sharpness: 0.8,
+            shot: ShotMetrics(detailSharpness: 0.8, faceCount: 2, faceQuality: 0.6, openEyes: 0.5)
+        )
+        XCTAssertEqual(QualityRanker.mainWarning(for: closedEyes, rating: QualityRanker.breakdown(closedEyes)), "Occhi chiusi")
+
+        var blurry = photo(sharpness: 0.1, shot: nil)
+        blurry.traits.insert(.blurry)
+        XCTAssertEqual(QualityRanker.mainWarning(for: blurry, rating: QualityRanker.breakdown(blurry)), "Forse sfocata")
+
+        let fine = photo(sharpness: 0.9, shot: ShotMetrics(detailSharpness: 0.9, subjectSharpness: 0.9))
+        XCTAssertNil(QualityRanker.mainWarning(for: fine, rating: QualityRanker.breakdown(fine)))
+    }
+
     func testShotMetricsAreOptionalAndSurviveARoundTrip() throws {
         var item = TestData.item()
         let plain = try JSONDecoder().decode(IndexedItem.self, from: JSONEncoder().encode(item))

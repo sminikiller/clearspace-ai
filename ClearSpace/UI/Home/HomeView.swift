@@ -57,7 +57,15 @@ struct HomeView: View {
                     .presentationDetents([.medium, .large])
             }
             .task(id: env.store.revision) {
-                device = DeviceStorage.snapshot()
+                // Durante un'analisi l'indice cambia di continuo, ma lo spazio libero cambia solo dopo
+                // un'eliminazione: basta rileggerlo ogni tanto. La lettura può richiedere decine di
+                // millisecondi, quindi avviene fuori dal thread principale e non frena lo scorrimento.
+                if let device, Date().timeIntervalSince(device.date) < 10 { return }
+                let snapshot = await Task.detached(priority: .utility) {
+                    DeviceStorage.snapshot()
+                }.value
+                guard !Task.isCancelled else { return }
+                device = snapshot
             }
             .toast($toast)
         }
@@ -523,7 +531,7 @@ struct HomeView: View {
             Text(subtitle)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
             Text("\(Format.count(stat.count)) · \(Format.bytes(stat.bytes))")
                 .font(.caption.weight(.semibold))
         }

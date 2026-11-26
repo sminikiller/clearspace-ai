@@ -9,7 +9,7 @@ struct QuickCleanupSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            ReadableForm {
                 Section {
                     Picker("Elementi per sessione", selection: env.preferences.binding(\.quickSessionSize)) {
                         ForEach(sizes, id: \.self) { size in
@@ -64,7 +64,7 @@ struct GoalCleanupSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            ReadableForm {
                 Section {
                     Picker("Obiettivo", selection: $targetGB) {
                         ForEach(options, id: \.self) { value in
@@ -117,7 +117,7 @@ struct GuidedCleanupView: View {
     @State private var toast: String?
 
     var body: some View {
-        List {
+        ReadableList {
             Section {
                 InfoBanner(text: "Segui i passi nell'ordine che preferisci. In ogni passo decidi tu cosa tenere: l'eliminazione avviene solo dalla scheda Revisione.")
             }
@@ -285,7 +285,7 @@ struct AdvancedCleanupView: View {
     }
 
     private var form: some View {
-        Form {
+        ReadableForm {
             Section("Tipo di contenuto") {
                 ForEach(categoryOptions, id: \.0) { option in
                     Toggle(option.1, isOn: categoryBinding(option.0))

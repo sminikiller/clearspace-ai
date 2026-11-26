@@ -244,10 +244,10 @@ struct ItemGridScreen: View {
         let chosen = items.filter { selection.contains($0.id) }
         let bytes = chosen.reduce(Int64(0)) { $0 + $1.bytes }
         return VStack(spacing: 8) {
-            HStack {
+            HStack(alignment: .firstTextBaseline) {
                 Text(Format.plural(selection.count, "selezionato", "selezionati"))
                     .font(.subheadline.weight(.medium))
-                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("grid.selectionCount")
                 Spacer(minLength: 8)
                 Button(selection.count == items.count ? "Deseleziona tutto" : "Seleziona tutto") {
@@ -258,7 +258,7 @@ struct ItemGridScreen: View {
                     }
                 }
                 .font(.subheadline)
-                .lineLimit(1)
+                .multilineTextAlignment(.trailing)
             }
             Button {
                 deleteSelection(chosen)
@@ -268,12 +268,12 @@ struct ItemGridScreen: View {
                         ProgressView()
                             .tint(.white)
                     } else {
-                        Label(
+                        // Su due righe piuttosto che tagliata.
+                        ButtonTitle(
                             chosen.isEmpty ? "Elimina" : "Elimina \(chosen.count) · \(Format.bytes(bytes))",
                             systemImage: "trash"
                         )
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+                        .multilineTextAlignment(.center)
                     }
                 }
                 .frame(maxWidth: .infinity)

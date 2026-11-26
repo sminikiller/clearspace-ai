@@ -48,6 +48,36 @@ enum KeychainKeyStore {
     }
 }
 
+/// Mette in ordine i salvataggi di uno stesso file. Ogni istantanea prende un numero quando viene
+/// fatta; la scrittura avviene solo se nessuna istantanea più recente è già stata scritta, e una alla
+/// volta. Così il salvataggio periodico e quello di quando l'app va in background, partiti quasi
+/// insieme, non possono lasciare sul disco la copia più vecchia al posto della più recente.
+final class OrderedSaves: @unchecked Sendable {
+    private let lock = NSLock()
+    private var issued: UInt64 = 0
+    private var written: UInt64 = 0
+
+    /// Numero d'ordine dell'istantanea: va preso nel momento in cui la si fa.
+    func ticket() -> UInt64 {
+        lock.lock()
+        defer { lock.unlock() }
+        issued &+= 1
+        return issued
+    }
+
+    /// Esegue `write` se l'istantanea è più recente dell'ultima scritta. Restituisce `false` se è stata
+    /// saltata perché superata.
+    @discardableResult
+    func perform(ticket: UInt64, _ write: () -> Void) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard ticket > written else { return false }
+        write()
+        written = ticket
+        return true
+    }
+}
+
 /// Persistenza locale cifrata: JSON → AES-GCM → file protetto da Data Protection.
 /// L'archivio contiene solo riferimenti e metadati, mai i contenuti originali, ed è escluso dai backup
 /// (un'app che libera spazio non deve occuparne su iCloud).

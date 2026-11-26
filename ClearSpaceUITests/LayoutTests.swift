@@ -320,7 +320,7 @@ final class LayoutTests: UITestCase {
             return
         }
         similar.tap()
-        let row = element(containing: "potenziali")
+        let row = app.descendants(matching: .any).matching(identifier: "groups.row").firstMatch
         guard row.waitForExistence(timeout: 15) else {
             checkLayout("L24-nessun-gruppo")
             goBack()

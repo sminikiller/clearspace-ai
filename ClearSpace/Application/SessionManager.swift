@@ -24,6 +24,8 @@ final class SessionManager {
     private let history: HistoryStore
     private let preferences: PreferencesStore
     private let files: SecureFileStore
+    /// Le sessioni si salvano nell'ordine in cui sono state fotografate (vedi `OrderedSaves`).
+    private let saves = OrderedSaves()
 
     init(
         store: IndexStore,
@@ -181,10 +183,14 @@ final class SessionManager {
 
     /// Registra la scelta sull'elemento corrente e passa al successivo.
     /// Restituisce l'esito: se l'elemento è protetto la scelta "elimina" viene rifiutata e nulla cambia.
+    /// - Parameter expectedItemID: l'elemento su cui l'utente ha fatto il gesto. Se nel frattempo la carta
+    ///   è cambiata (ad esempio l'elemento è sparito durante l'animazione), la scelta non viene applicata a
+    ///   un altro elemento.
     @discardableResult
-    func decide(_ choice: SwipeChoice) -> MarkResult? {
+    func decide(_ choice: SwipeChoice, expectedItemID: UUID? = nil) -> MarkResult? {
         guard let index = activeIndex,
               let itemID = sessions[index].currentItemID,
+              expectedItemID == nil || expectedItemID == itemID,
               let item = store.item(itemID) else {
             return nil
         }
@@ -332,8 +338,12 @@ final class SessionManager {
     private func write() async {
         let snapshot = sessions
         let files = self.files
+        let saves = self.saves
+        let ticket = saves.ticket()
         await Task.detached(priority: .userInitiated) {
-            try? files.save(snapshot, as: sessionsFileName)
+            _ = saves.perform(ticket: ticket) {
+                try? files.save(snapshot, as: sessionsFileName)
+            }
         }.value
     }
 

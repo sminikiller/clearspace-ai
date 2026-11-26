@@ -50,8 +50,7 @@ struct SimilarStripView: View {
                 )
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .fixedSize(horizontal: false, vertical: true)
                 .layoutPriority(1)
                 Spacer(minLength: 4)
                 // Con il testo grande restano solo le icone: le scritte spingerebbero fuori il titolo.
@@ -201,12 +200,14 @@ struct SimilarStripView: View {
         // Affiancati sotto le anteprime (testo grande) si dividono la larghezza in parti uguali.
         let sharesWidth = dynamicTypeSize > .large
         return Button(action: action) {
+            // Su due righe se serve: una scritta tagliata non si capirebbe.
             HStack(spacing: 4) {
                 Image(systemName: systemImage)
                     .accessibilityHidden(true)
                 Text(title)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .font(.caption.weight(.semibold))
             .foregroundStyle(isProminent ? Color.white : Theme.keep)

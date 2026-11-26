@@ -8,7 +8,7 @@ struct PlanView: View {
     private var plan: PlanManager { env.plan }
 
     var body: some View {
-        List {
+        ReadableList {
             Section {
                 if plan.monetizationEnabled {
                     DetailRow(label: "Piano attuale", value: plan.currentTier.title)
@@ -141,7 +141,7 @@ struct CapabilitiesInfoView: View {
     ]
 
     var body: some View {
-        List {
+        ReadableList {
             Section {
                 ForEach(capabilities) { capability in
                     HStack(alignment: .top, spacing: 12) {

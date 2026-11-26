@@ -395,7 +395,8 @@ enum GuideBook {
                     "Nel confronto: il pulsante con i quadratini in alto."
                 ]),
                 section("L'elenco dei gruppi", points: [
-                    "Prima vengono i gruppi ancora da decidere, da quello che libera più spazio; quelli in cui ogni foto è già conservata, proposta o protetta finiscono in fondo con l'etichetta «Deciso».",
+                    "Ogni gruppo mostra le anteprime grandi, su tutta la riga: le scintille indicano la consigliata, la stella le tue migliori, il cestino le foto già proposte. Sotto leggi quante sono e quanto spazio puoi liberare («Libera fino a…»), oppure «Scegli tu quale tenere» se il gruppo non ha ancora un consiglio.",
+                    "Prima vengono i gruppi ancora da decidere, da quello che libera più spazio; quelli in cui ogni foto è già conservata, proposta o protetta finiscono in fondo con la scritta «Deciso».",
                     "In cima, «Tieni la migliore in tutti i gruppi» apre tutti i gruppi da decidere in una schermata; sotto, «Decidi un gruppo dopo l'altro» li apre uno alla volta e dice quanti restano e quanto spazio potresti liberare. Se sono tutti decisi diventa «Rivedi i gruppi uno dopo l'altro», per ricontrollarli.",
                     "Mentre guardi l'elenco i gruppi restano al loro posto, anche se l'analisi è in corso: l'ordine si aggiorna quando lo riapri."
                 ]),
@@ -421,7 +422,9 @@ enum GuideBook {
                     "Le frecce in alto a destra di ogni anteprima la aprono a tutto schermo: lì scorri di lato tra tutte le foto del gruppo."
                 ]),
                 section("Elimina", [
-                    "In basso leggi «N da eliminare · M da tenere». «Elimina N» elimina subito: per foto e video conferma iOS, con un avviso che dice quante ne verranno eliminate; le foto vanno in «Eliminati di recente», dove restano 30 giorni. Per file e contenuti che potrebbero essere importanti ClearSpace chiede prima anche la sua conferma, con lo spazio e gli effetti su iCloud.",
+                    "In basso leggi «N da eliminare · M da tenere» e, a destra, lo spazio che si libera. «Elimina N» elimina subito: per foto e video conferma iOS, con un avviso che dice quante ne verranno eliminate; le foto vanno in «Eliminati di recente», dove restano 30 giorni. Per file e contenuti che potrebbero essere importanti ClearSpace chiede prima anche la sua conferma, con lo spazio e gli effetti su iCloud.",
+                    "Se scegli di eliminare tutte le foto del gruppo, ClearSpace te lo fa notare prima: non ne resterebbe nessuna.",
+                    "Aperta dall'elenco dei gruppi, dopo l'eliminazione la galleria si chiude da sola: in cima all'elenco leggi quante foto sono in «Eliminati di recente», quanto spazio occupano ancora e come svuotarlo.",
                     "«Tieni tutte» conserva tutto il gruppo. Se annulli l'avviso di iOS non cambia nulla. Quando l'eliminazione riesce il telefono vibra leggermente."
                 ], tip: "Aperta dallo swipe, la galleria segue le regole della sessione: il pulsante diventa «Scarta N», le foto scartate passano alla Revisione e la galleria si chiude da sola."),
                 section("In alto e nel menu", points: [
@@ -453,7 +456,9 @@ enum GuideBook {
                     "Le etichette: Voto, Occhi aperti o chiusi, Volti, Sorriso, Forse sfocata, Nitidezza, Molto scura, Modificata, Preferita, megapixel, durata, dimensione e data.",
                     "Tieni / Elimina per la foto selezionata e la stella per segnarla come migliore. Gli elementi protetti mostrano il lucchetto."
                 ]),
-                section("I pulsanti in basso", points: [
+                section("I pulsanti in basso", [
+                    "Aperto dalla galleria di un gruppo, dopo uno di questi pulsanti il confronto si chiude e torni alla galleria con la scelta già fatta: lì «Elimina» elimina subito le foto scartate."
+                ], points: [
                     "Tieni solo la migliore (o la tua migliore).",
                     "Tieni solo questa: resta la foto selezionata.",
                     "Tieni tutte: conserva tutto il gruppo."

@@ -22,7 +22,7 @@ struct AudioHubView: View {
     }
 
     private var content: some View {
-        List {
+        ReadableList {
             Section {
                 Button {
                     showsImporter = true
@@ -103,7 +103,8 @@ struct AudioHubView: View {
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.displayTitle)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
                 Text("\(Format.duration(item.duration)) · \(Format.bytesOrUnknown(item.estimatedBytes)) · \(Format.date(item.createdAt))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -150,7 +151,7 @@ struct AudioDetailView: View {
 
     var body: some View {
         let _ = env.store.revision
-        List {
+        ReadableList {
             if let item = env.store.item(itemID) {
                 Section {
                     AudioPlaybackView(item: item)

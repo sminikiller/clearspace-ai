@@ -8,7 +8,7 @@ struct ArchiveView: View {
     private var summary: CatalogSummary { env.store.summary }
 
     var body: some View {
-        List {
+        ReadableList {
             Section {
                 InfoBanner(text: "Scegli un anno per sfogliarne i contenuti o per rivederli tutti con gli swipe. L'età di un contenuto non è mai un motivo per eliminarlo.")
             }
@@ -76,7 +76,7 @@ struct YearDetailView: View {
     }
 
     var body: some View {
-        List {
+        ReadableList {
             Section("Pulizia annuale \(String(year))") {
                 HStack(spacing: 8) {
                     StatTile(title: "Conservati", value: Format.count(counts.kept), systemImage: "checkmark", tint: Theme.keep)

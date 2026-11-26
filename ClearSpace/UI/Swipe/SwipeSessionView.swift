@@ -49,16 +49,23 @@ struct SwipeSessionView: View {
                 .background(Theme.background)
                 .navigationTitle(sessions.active?.title ?? "Pulizia")
                 .navigationBarTitleDisplayMode(.inline)
+                // Pulsanti con la sola icona: il titolo della sessione ha lo spazio per leggersi intero.
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Chiudi") {
+                        Button {
                             sessions.closePresentation()
+                        } label: {
+                            Label("Chiudi", systemImage: "xmark")
                         }
+                        .accessibilityHint("Le scelte restano salvate: puoi riprendere la sessione dalla Home")
                     }
                     ToolbarItem(placement: .primaryAction) {
-                        Button("Revisione") {
+                        Button {
                             openReview()
+                        } label: {
+                            Label("Revisione", systemImage: "checklist")
                         }
+                        .accessibilityHint("Apre la lista degli elementi da eliminare")
                     }
                 }
         }
@@ -294,9 +301,11 @@ struct SwipeSessionView: View {
 
         Task {
             try? await Task.sleep(for: .milliseconds(reduceMotion ? 10 : 190))
-            let result = sessions.decide(choice)
+            // La scelta vale solo per la carta su cui è stato fatto il gesto.
+            let result = sessions.decide(choice, expectedItemID: item.id)
             offset = .zero
             isCommitting = false
+            guard result != nil else { return }
             if choice == .delete {
                 markTrigger += 1
             } else {

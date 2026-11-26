@@ -11,7 +11,7 @@ struct AppAssistantView: View {
     }
 
     var body: some View {
-        List {
+        ReadableList {
             Section {
                 InfoBanner(text: "iOS non permette a un'app di leggere o cancellare i dati delle altre. Qui trovi, passo per passo, dove liberare spazio dentro ciascuna app.")
                 VStack(alignment: .leading, spacing: 6) {
@@ -89,7 +89,7 @@ struct GuideDetailView: View {
     @Environment(AppEnvironment.self) private var env
 
     var body: some View {
-        List {
+        ReadableList {
             Section {
                 Text(guide.summary)
                     .font(.subheadline)
