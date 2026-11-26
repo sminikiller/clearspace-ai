@@ -424,6 +424,7 @@ enum GuideBook {
                 section("Elimina", [
                     "In basso leggi «N da eliminare · M da tenere» e, a destra, lo spazio che si libera. «Elimina N» elimina subito: per foto e video conferma iOS, con un avviso che dice quante ne verranno eliminate; le foto vanno in «Eliminati di recente», dove restano 30 giorni. Per file e contenuti che potrebbero essere importanti ClearSpace chiede prima anche la sua conferma, con lo spazio e gli effetti su iCloud.",
                     "Se scegli di eliminare tutte le foto del gruppo, ClearSpace te lo fa notare prima: non ne resterebbe nessuna.",
+                    "Aperta dall'elenco dei gruppi, dopo l'eliminazione la galleria si chiude da sola: in cima all'elenco leggi quante foto sono in «Eliminati di recente», quanto spazio occupano ancora e come svuotarlo.",
                     "«Tieni tutte» conserva tutto il gruppo. Se annulli l'avviso di iOS non cambia nulla. Quando l'eliminazione riesce il telefono vibra leggermente."
                 ], tip: "Aperta dallo swipe, la galleria segue le regole della sessione: il pulsante diventa «Scarta N», le foto scartate passano alla Revisione e la galleria si chiude da sola."),
                 section("In alto e nel menu", points: [

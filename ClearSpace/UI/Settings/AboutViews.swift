@@ -52,17 +52,17 @@ struct ReleaseNote: Identifiable {
         ReleaseNote(
             systemImage: "square.grid.2x2",
             title: "Gruppi più chiari",
-            text: "Nell'elenco dei gruppi le anteprime sono più grandi e occupano tutta la riga: le scintille indicano la consigliata, la stella le tue migliori, il cestino quelle già proposte. Sotto leggi quante sono e quanto spazio puoi liberare."
+            text: "Nell'elenco dei gruppi le anteprime sono più grandi e occupano tutta la riga: le scintille indicano la consigliata, la stella le tue migliori, il cestino quelle già proposte. Nella galleria ogni foto mostra il suo voto o il difetto più evidente: «Occhi chiusi», «Forse sfocata», «Molto scura»."
         ),
         ReleaseNote(
-            systemImage: "rectangle.split.2x1",
-            title: "Dal confronto alla galleria",
-            text: "Nel confronto «Tieni solo la migliore», «Tieni solo questa» e «Tieni tutte» ti riportano alla galleria del gruppo con la scelta già fatta: «Elimina» è subito a portata di dito."
+            systemImage: "arrow.uturn.left",
+            title: "Meno passaggi",
+            text: "Dopo «Elimina» in un gruppo aperto dall'elenco torni subito all'elenco, con in cima come svuotare «Eliminati di recente». Nel confronto «Tieni solo la migliore», «Tieni solo questa» e «Tieni tutte» riportano alla galleria con la scelta già fatta."
         ),
         ReleaseNote(
             systemImage: "exclamationmark.shield",
             title: "Nessun gruppo svuotato per sbaglio",
-            text: "Se scegli di eliminare tutte le foto di un gruppo, ClearSpace te lo fa notare prima della conferma di iOS."
+            text: "Se scegli di eliminare tutte le foto di un gruppo, ClearSpace te lo fa notare prima della conferma di iOS. Un doppio tocco su «Analizza» non avvia più due analisi insieme."
         ),
         ReleaseNote(
             systemImage: "photo",

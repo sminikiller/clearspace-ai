@@ -38,6 +38,12 @@ enum GroupCatalog {
     }
 }
 
+/// Elementi eliminati e spazio che occupano ancora finché resta pieno «Eliminati di recente».
+private struct DeletionTally {
+    var count = 0
+    var bytes: Int64 = 0
+}
+
 /// Elenco dei gruppi di duplicati o di contenuti simili di una categoria.
 struct GroupListView: View {
     let collection: SmartCollection
@@ -48,9 +54,17 @@ struct GroupListView: View {
     @State private var confirmsMarkAll = false
     @State private var toast: String?
     @State private var lastReload: Date?
+    /// Eliminazioni fatte dalle gallerie da quando l'elenco è aperto: l'avviso in cima spiega come
+    /// liberare davvero lo spazio.
+    @State private var deletedHere = DeletionTally()
 
     var body: some View {
         ReadableList {
+            if deletedHere.count > 0 {
+                RecentlyDeletedSection(count: deletedHere.count, deviceBytes: deletedHere.bytes, onDismiss: {
+                    deletedHere = DeletionTally()
+                })
+            }
             Section {
                 explanation
                 if entries.contains(where: { !$0.isDecided }) {
@@ -73,17 +87,38 @@ struct GroupListView: View {
                 }
             }
             if entries.isEmpty && !isLoading {
-                ContentUnavailableView(
-                    "Nessun gruppo trovato",
-                    systemImage: "square.on.square",
-                    description: Text("Completa l'analisi per cercare duplicati e contenuti simili.")
-                )
+                if env.scan.isRunning {
+                    // Durante l'analisi i gruppi arrivano man mano: meglio dirlo che mostrare «nessun gruppo».
+                    ContentUnavailableView {
+                        Label("Sto cercando i gruppi…", systemImage: "magnifyingglass")
+                    } description: {
+                        Text("L'analisi è in corso: i gruppi compaiono qui man mano che li trovo.")
+                    } actions: {
+                        ProgressView()
+                    }
+                } else {
+                    ContentUnavailableView {
+                        Label("Nessun gruppo trovato", systemImage: "square.on.square")
+                    } description: {
+                        Text("Completa l'analisi per cercare duplicati e contenuti simili.")
+                    } actions: {
+                        Button("Analizza ora") {
+                            env.scan.start()
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
             }
             ForEach(entries) { entry in
                 // Si apre la galleria del gruppo: tutte le anteprime insieme, con la selezione multipla.
                 // Da lì «Confronta» mostra le foto in grande una accanto all'altra.
                 NavigationLink {
-                    GroupSelectionView(groupID: entry.group.id)
+                    // Dopo «Elimina» si torna qui da soli: niente schermata intermedia da chiudere.
+                    GroupSelectionView(groupID: entry.group.id, onDeleted: { decision in
+                        deletedHere.count += decision.deletedCount
+                        deletedHere.bytes += decision.freedBytes
+                        toast = decision.message
+                    })
                 } label: {
                     GroupRow(entry: entry)
                 }
@@ -131,6 +166,7 @@ struct GroupListView: View {
             reload()
         }
         .toast($toast)
+        .sensoryFeedback(.success, trigger: deletedHere.count)
     }
 
     @ViewBuilder

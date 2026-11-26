@@ -291,6 +291,15 @@ enum QualityRanker {
         return result
     }
 
+    /// Il difetto più evidente, da mostrare sull'anteprima di una foto: occhi chiusi, forse sfocata,
+    /// molto scura. Dice a colpo d'occhio perché una foto è peggiore delle altre. La quota di volti
+    /// riconosciuti non conta: da sola non è un difetto che si vede.
+    static func mainWarning(for item: IndexedItem, rating: Breakdown) -> String? {
+        highlights(for: item, rating: rating)
+            .first { $0.kind == .warning && !$0.text.hasPrefix("Volti") }?
+            .text
+    }
+
     struct Highlight: Equatable, Sendable {
         enum Kind: Sendable {
             case good

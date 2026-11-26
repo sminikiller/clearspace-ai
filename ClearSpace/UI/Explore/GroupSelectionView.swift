@@ -70,6 +70,9 @@ struct GroupSelectionView: View {
     var sequence: GroupSequenceControl?
     /// Elimina subito le foto scartate. Spento nello swipe, dove ogni scelta passa dalla Revisione.
     var deletesDirectly = true
+    /// Dopo un'eliminazione riuscita torna indietro e passa l'esito a chi ha aperto la galleria (l'elenco
+    /// dei gruppi), invece di mostrare la schermata «Fatto».
+    var onDeleted: ((GroupDecision) -> Void)?
 
     @Environment(AppEnvironment.self) private var env
     @Environment(\.dismiss) private var dismiss
@@ -309,6 +312,7 @@ struct GroupSelectionView: View {
                     isLocked: current.locked.contains(item.id),
                     isSuggested: item.id == group.suggestedKeepID,
                     grade: item.isImage ? ratings[item.id]?.grade : nil,
+                    warning: item.isImage ? ratings[item.id].flatMap { QualityRanker.mainWarning(for: item, rating: $0) } : nil,
                     pointSide: isSmallGroup ? 240 : 170,
                     onExpand: { openPreview(item, among: shown) }
                 )
@@ -847,6 +851,10 @@ struct GroupSelectionView: View {
             sequence.onDecided(decision)
         } else if closesAfterDecision {
             dismiss()
+        } else if decision.deletedCount > 0, let onDeleted {
+            // Si torna all'elenco, che mostra l'esito e come liberare davvero lo spazio.
+            onDeleted(decision)
+            dismiss()
         } else if decision.deletedCount > 0 {
             outcome = decision
         } else {
@@ -864,6 +872,8 @@ private struct GroupGridCell: View {
     let isLocked: Bool
     let isSuggested: Bool
     let grade: Int?
+    /// Difetto evidente da segnalare al posto del voto, ad esempio «Occhi chiusi».
+    let warning: String?
     /// Lato dell'anteprima da preparare: più grande quando le colonne sono due.
     let pointSide: CGFloat
     let onExpand: () -> Void
@@ -893,8 +903,10 @@ private struct GroupGridCell: View {
                 .accessibilityHidden(true)
             }
             .overlay(alignment: .bottomLeading) {
+                // A destra resta il posto per il segno della scelta.
                 cornerNote
                     .padding(5)
+                    .padding(.trailing, 30)
             }
             .overlay(alignment: .bottomTrailing) {
                 choiceBadge
@@ -949,14 +961,26 @@ private struct GroupGridCell: View {
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .background(.black.opacity(0.6), in: Capsule())
+        } else if let warning {
+            // Scritta intera se ci sta, altrimenti solo il segno di avviso (la scritta resta per VoiceOver).
+            ViewThatFits(in: .horizontal) {
+                note(Text("\(Image(systemName: "exclamationmark.triangle.fill")) \(warning)"), tint: Theme.later)
+                note(Text(Image(systemName: "exclamationmark.triangle.fill")), tint: Theme.later)
+            }
         } else if let grade {
-            Text("\(grade)")
-                .font(.caption2.weight(.bold).monospacedDigit())
-                .foregroundStyle(.white)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(.black.opacity(0.6), in: Capsule())
+            note(Text("Voto \(grade)"), tint: .black.opacity(0.6))
         }
+    }
+
+    private func note(_ text: Text, tint: Color) -> some View {
+        text
+            .font(.caption2.weight(.bold).monospacedDigit())
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(tint, in: Capsule())
     }
 
     private func badge(_ systemImage: String, tint: Color) -> some View {
@@ -981,6 +1005,7 @@ private struct GroupGridCell: View {
         }
         if item.isStarred { parts.append(GroupWording.starred(masculine: masculine).lowercased()) }
         if isSuggested { parts.append(GroupWording.suggested(masculine: masculine).lowercased()) }
+        if let warning { parts.append(warning.lowercased()) }
         if let grade { parts.append("voto \(grade) su 100") }
         if item.duration > 0 { parts.append(Format.duration(item.duration)) }
         return parts.joined(separator: ", ")

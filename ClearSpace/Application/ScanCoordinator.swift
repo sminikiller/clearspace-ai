@@ -133,7 +133,9 @@ final class ScanCoordinator {
 
     /// Avvia una scansione. Con `deep` vengono verificati anche i duplicati sul contenuto originale.
     func start(deep: Bool = true) {
-        guard !isRunning else { return }
+        // Anche un secondo tocco arrivato prima che l'analisi sia partita non ne avvia un'altra in
+        // parallelo: due analisi insieme rifarebbero lo stesso lavoro e si contenderebbero l'indice.
+        guard !isRunning, task == nil else { return }
         task = Task { [weak self] in
             await self?.run(deep: deep)
         }
@@ -161,7 +163,7 @@ final class ScanCoordinator {
 
     /// Esegue una scansione completa e attende la fine: usato dalle attività in background.
     func runInBackground() async -> Bool {
-        guard !isRunning else { return false }
+        guard !isRunning, task == nil else { return false }
         await run(deep: true)
         return state == .completed
     }
@@ -172,6 +174,9 @@ final class ScanCoordinator {
         isCancelled = false
         pausedByUser = false
         progress = [:]
+        // Fase A — Metadati. Lo stato passa subito a «in corso», prima di ogni attesa: da qui un'altra
+        // richiesta di analisi viene ignorata.
+        enter(.metadata)
         // Con il dispositivo bloccato foto e file non sono leggibili: un'analisi in quel momento
         // vedrebbe una libreria vuota. Meglio rimandarla.
         guard UIApplication.shared.isProtectedDataAvailable else {
@@ -179,8 +184,6 @@ final class ScanCoordinator {
         }
         await safety.refreshProtectedAlbums()
 
-        // Fase A — Metadati
-        enter(.metadata)
         guard await indexPhotoLibrary() else { return finish(cancelled: true) }
         if plan.isUnlocked(.documents) || plan.isUnlocked(.audioTools) {
             guard await indexFolders() else { return finish(cancelled: true) }
