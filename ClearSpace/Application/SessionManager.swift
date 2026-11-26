@@ -24,6 +24,8 @@ final class SessionManager {
     private let history: HistoryStore
     private let preferences: PreferencesStore
     private let files: SecureFileStore
+    /// Le sessioni si salvano nell'ordine in cui sono state fotografate (vedi `OrderedSaves`).
+    private let saves = OrderedSaves()
 
     init(
         store: IndexStore,
@@ -336,8 +338,12 @@ final class SessionManager {
     private func write() async {
         let snapshot = sessions
         let files = self.files
+        let saves = self.saves
+        let ticket = saves.ticket()
         await Task.detached(priority: .userInitiated) {
-            try? files.save(snapshot, as: sessionsFileName)
+            _ = saves.perform(ticket: ticket) {
+                try? files.save(snapshot, as: sessionsFileName)
+            }
         }.value
     }
 

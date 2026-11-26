@@ -128,7 +128,7 @@ ClearSpaceTests/             test unitari sulla logica
 ClearSpaceUITests/           prova d'uso automatica sul simulatore
 ```
 
-98 file Swift per l'app (circa 26.000 righe), 12 file di test unitari e 3 per la prova d'uso e il giro con il testo grande.
+98 file Swift per l'app (circa 26.000 righe), 13 file di test unitari e 3 per la prova d'uso e il giro con il testo grande.
 
 ## Architettura
 
@@ -215,7 +215,7 @@ Le schermate che scorrono seguono la dimensione del testo scelta in iOS. Quelle 
 
 La scansione si può mettere in pausa, si sospende da sola con batteria scarica o dispositivo caldo e non scarica originali da iCloud senza consenso.
 
-Le analisi pesanti (anteprime, impronte visive dei gruppi, misure degli scatti simili) esaminano più elementi insieme, su un massimo di quattro processori, e chiedono a PhotoKit gli asset a blocchi invece che uno per uno. Durante l'analisi l'indice completo si salva al massimo ogni 10 secondi e il riepilogo si ricalcola al massimo una volta al secondo; le decisioni dell'utente hanno un file a parte, salvato subito.
+Le analisi pesanti (anteprime, impronte visive dei gruppi, misure degli scatti simili) esaminano più elementi insieme, su un massimo di quattro processori, e chiedono a PhotoKit gli asset a blocchi invece che uno per uno. Durante l'analisi l'indice completo si salva al massimo ogni 10 secondi e il riepilogo si ricalcola al massimo una volta al secondo; le decisioni dell'utente hanno un file a parte, salvato subito. I salvataggi di uno stesso file avvengono uno alla volta e una copia più vecchia non sovrascrive mai una più recente (`OrderedSaves`): il salvataggio periodico e quello di quando l'app va in background non possono far perdere l'ultima scelta.
 
 ---
 

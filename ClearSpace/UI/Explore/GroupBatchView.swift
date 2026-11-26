@@ -20,6 +20,9 @@ struct GroupBatchView: View {
     @State private var toast: String?
     @State private var outcome: DirectDeletionResult?
     @State private var deletionsDone = 0
+    /// Eliminati dalle gallerie aperte da qui: dopo «Elimina» la galleria torna da sola a questa schermata.
+    @State private var galleryDeletedCount = 0
+    @State private var galleryDeletedBytes: Int64 = 0
 
     /// Oltre questo numero di elementi ClearSpace chiede conferma anche per le sole foto.
     private static var largeDeletion: Int { 100 }
@@ -71,6 +74,7 @@ struct GroupBatchView: View {
             Text(deletionMessage)
         }
         .sensoryFeedback(.success, trigger: deletionsDone)
+        .sensoryFeedback(.success, trigger: galleryDeletedCount)
         .toast($toast)
     }
 
@@ -89,6 +93,9 @@ struct GroupBatchView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     introduction
+                    if galleryDeletedCount > 0 {
+                        RecentlyDeletedCard(count: galleryDeletedCount, deviceBytes: galleryDeletedBytes)
+                    }
                     ForEach(plans) { plan in
                         row(plan)
                     }
@@ -134,7 +141,12 @@ struct GroupBatchView: View {
             .accessibilityIdentifier("batch.toggle")
 
             NavigationLink {
-                GroupSelectionView(groupID: plan.groupID)
+                // Dopo «Elimina» si torna qui da soli, con l'esito e come svuotare «Eliminati di recente».
+                GroupSelectionView(groupID: plan.groupID, onDeleted: { decision in
+                    galleryDeletedCount += decision.deletedCount
+                    galleryDeletedBytes += decision.freedBytes
+                    toast = decision.message
+                })
             } label: {
                 VStack(alignment: .leading, spacing: 6) {
                     thumbnails(ordered, plan: plan, included: included)
@@ -188,6 +200,9 @@ struct GroupBatchView: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
+                if galleryDeletedCount > 0 {
+                    RecentlyDeletedCard(count: galleryDeletedCount, deviceBytes: galleryDeletedBytes)
+                }
                 if env.store.markedCount > 0 {
                     Button {
                         openReview()

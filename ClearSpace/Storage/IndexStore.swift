@@ -62,6 +62,9 @@ final class IndexStore {
     @ObservationIgnored var contextProvider: @MainActor () -> CollectionContext = { CollectionContext() }
 
     private let files: SecureFileStore
+    /// Salvataggi dell'indice e delle decisioni, ciascuno nel suo ordine (vedi `OrderedSaves`).
+    private let indexSaves = OrderedSaves()
+    private let reviewSaves = OrderedSaves()
 
     init(files: SecureFileStore = SecureFileStore()) {
         self.files = files
@@ -631,8 +634,12 @@ final class IndexStore {
             groups: Array(groupsByID.values)
         )
         let files = self.files
+        let saves = indexSaves
+        let ticket = saves.ticket()
         await Task.detached(priority: .utility) {
-            try? files.save(snapshot, as: indexFileName)
+            _ = saves.perform(ticket: ticket) {
+                try? files.save(snapshot, as: indexFileName)
+            }
         }.value
     }
 
@@ -659,8 +666,12 @@ final class IndexStore {
     private func writeReview() async {
         let records = reviewRecords()
         let files = self.files
+        let saves = reviewSaves
+        let ticket = saves.ticket()
         await Task.detached(priority: .userInitiated) {
-            try? files.save(records, as: reviewFileName)
+            _ = saves.perform(ticket: ticket) {
+                try? files.save(records, as: reviewFileName)
+            }
         }.value
     }
 
