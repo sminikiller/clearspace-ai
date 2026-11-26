@@ -456,8 +456,7 @@ struct GroupComparisonView: View {
                         keepOnly([selected.id], in: group)
                     } label: {
                         Text(masculine ? "Tieni solo questo" : "Tieni solo questa")
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.75)
+                            .multilineTextAlignment(.center)
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
@@ -466,6 +465,7 @@ struct GroupComparisonView: View {
                     keepAll(members)
                 } label: {
                     Text(masculine ? "Tieni tutti" : "Tieni tutte")
+                        .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)

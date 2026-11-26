@@ -12,7 +12,7 @@ struct ICloudCenterView: View {
     private var summary: CatalogSummary { env.store.summary }
 
     var body: some View {
-        List {
+        ReadableList {
             photosSection
             driveSection
             otherDataSection

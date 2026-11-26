@@ -169,10 +169,13 @@ struct SwipeCardView: View {
             Text(item.displayTitle)
                 .font(.headline)
                 .lineLimit(1)
+                .truncationMode(.middle)
+            // Su due righe se serve: dimensione, data e qualità devono leggersi intere.
             Text(detailLine)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-                .lineLimit(1)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)

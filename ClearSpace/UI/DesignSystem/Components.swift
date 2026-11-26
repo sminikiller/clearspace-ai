@@ -346,6 +346,88 @@ extension View {
     func compactControlText() -> some View {
         dynamicTypeSize(...DynamicTypeSize.xxLarge)
     }
+
+    /// Scritte sopra le anteprime (dimensione, durata, voto): restano piccole e leggibili dentro il
+    /// riquadro anche con il testo molto grande, invece di coprire la foto. Gli stessi dati sono
+    /// sempre anche nella descrizione per VoiceOver.
+    func thumbnailBadgeText() -> some View {
+        dynamicTypeSize(...DynamicTypeSize.xLarge)
+    }
+}
+
+// MARK: - Elenchi leggibili con il testo grande
+
+/// Etichetta con icona per gli elenchi. Con il testo molto grande iOS manda a capo il testo sotto
+/// l'icona: la prima riga parte accanto all'icona, le altre dal bordo, e le scritte sembrano spostate a
+/// sinistra. Qui il testo resta sempre in colonna accanto all'icona; con il testo normale l'etichetta
+/// è quella di sistema.
+struct ReadableLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        ReadableLabelBody(configuration: configuration)
+    }
+}
+
+private struct ReadableLabelBody: View {
+    let configuration: LabelStyleConfiguration
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// Colonna delle icone: cresce con il testo, così le icone restano allineate tra le righe.
+    @ScaledMetric(relativeTo: .body) private var iconColumn: CGFloat = 24
+
+    var body: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                configuration.icon
+                    .frame(minWidth: iconColumn)
+                configuration.title
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } else {
+            Label(configuration)
+        }
+    }
+}
+
+/// `List` con le etichette leggibili anche con il testo molto grande (`ReadableLabelStyle`). Si usa al
+/// posto di `List` in tutte le schermate a elenco.
+struct ReadableList<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        List {
+            content()
+        }
+        .labelStyle(ReadableLabelStyle())
+    }
+}
+
+/// `Form` con le etichette leggibili anche con il testo molto grande (`ReadableLabelStyle`).
+struct ReadableForm<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        Form {
+            content()
+        }
+        .labelStyle(ReadableLabelStyle())
+    }
+}
+
+/// Punto elenco: le righe successive restano allineate al testo, non al punto.
+struct BulletText: View {
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text("•")
+                .fontWeight(.bold)
+                .foregroundStyle(Color.accentColor)
+                .accessibilityHidden(true)
+            Text(text)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
 }
 
 /// Riga "etichetta: valore" con il valore allineato a destra.

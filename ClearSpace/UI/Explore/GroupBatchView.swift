@@ -159,39 +159,18 @@ struct GroupBatchView: View {
         return members.filter { keep.contains($0.id) } + members.filter { !keep.contains($0.id) }
     }
 
+    /// Anteprime grandi su tutta la larghezza: prima quella che resta (segno verde), poi quelle da
+    /// eliminare (cestino, spente).
     private func thumbnails(_ members: [IndexedItem], plan: GroupBatch.Plan, included: Bool) -> some View {
         let deleting = Set(plan.delete)
-        let shown = Array(members.prefix(5))
-        return HStack(spacing: 4) {
-            ForEach(shown) { member in
-                let deletes = included && deleting.contains(member.id)
-                ItemThumbnailView(item: member, pointSide: 70)
-                    .frame(width: 54, height: 54)
-                    .overlay {
-                        if deletes {
-                            Color.black.opacity(0.4)
-                        }
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    .overlay(alignment: .bottomTrailing) {
-                        Image(systemName: deletes ? "trash.fill" : "checkmark")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 18, height: 18)
-                            .background(deletes ? Theme.remove : Theme.keep, in: Circle())
-                            .padding(2)
-                    }
-                    .accessibilityHidden(true)
-            }
-            if members.count > shown.count {
-                Text("+\(members.count - shown.count)")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 36, height: 54)
-            }
+        return GroupStrip(
+            members: members,
+            dimmed: { included && deleting.contains($0.id) },
+            accessibilityDescription: "\(members.count) \(noun.many): ne resta \(plan.keep.count), \(count(plan.delete.count)) da eliminare"
+        ) { member in
+            let deletes = included && deleting.contains(member.id)
+            GroupStripBadge(systemImage: deletes ? "trash.fill" : "checkmark", tint: deletes ? Theme.remove : Theme.keep)
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(members.count) \(noun.many): ne resta \(plan.keep.count), \(count(plan.delete.count)) da eliminare")
     }
 
     private var emptyState: some View {
@@ -237,14 +216,22 @@ struct GroupBatchView: View {
     private var actionBar: some View {
         let totals = self.totals
         return VStack(spacing: 8) {
-            Text(totals.groups == 0
-                 ? "Nessun gruppo incluso"
-                 : "\(count(totals.items)) da eliminare in \(Format.plural(totals.groups, "gruppo", "gruppi"))")
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityIdentifier("batch.summary")
+            // Il conteggio a sinistra, lo spazio che si libera a destra: nessuna scritta tagliata.
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(totals.groups == 0
+                     ? "Nessun gruppo incluso"
+                     : "\(count(totals.items)) da eliminare in \(Format.plural(totals.groups, "gruppo", "gruppi"))")
+                    .font(.subheadline.weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("batch.summary")
+                Spacer(minLength: 4)
+                if totals.bytes > 0 {
+                    Text(Format.bytes(totals.bytes))
+                        .font(.subheadline.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(Theme.remove)
+                        .accessibilityLabel("Liberi fino a \(Format.bytes(totals.bytes))")
+                }
+            }
             Button {
                 startDeletion()
             } label: {
@@ -253,12 +240,9 @@ struct GroupBatchView: View {
                         ProgressView()
                             .tint(.white)
                     } else {
-                        Label(
-                            totals.items == 0 ? "Elimina" : "Elimina \(totals.items) · \(Format.bytes(totals.bytes))",
-                            systemImage: "trash"
-                        )
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+                        // Lo spazio è già scritto sopra: qui basta il numero, che entra sempre.
+                        ButtonTitle(totals.items == 0 ? "Elimina" : "Elimina \(totals.items)", systemImage: "trash")
+                            .multilineTextAlignment(.center)
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -272,8 +256,7 @@ struct GroupBatchView: View {
                 addToReview()
             } label: {
                 Text("Aggiungi alla Revisione")
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+                    .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)

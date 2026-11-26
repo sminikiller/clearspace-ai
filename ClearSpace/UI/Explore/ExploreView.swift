@@ -8,7 +8,7 @@ struct ExploreView: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            ReadableList {
                 Section {
                     NavigationLink {
                         SmartSearchView()
@@ -141,7 +141,7 @@ struct CollectionListView: View {
     @Environment(AppEnvironment.self) private var env
 
     var body: some View {
-        List {
+        ReadableList {
             Section {
                 ForEach(SmartCollection.collections(in: section)) { collection in
                     CollectionLink(collection: collection)

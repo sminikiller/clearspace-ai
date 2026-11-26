@@ -18,7 +18,7 @@ struct ResultsView: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            ReadableList {
                 activitySection
                 spaceSection
                 recentlyDeletedSection
@@ -233,7 +233,7 @@ struct ReportDetailView: View {
     @Environment(AppEnvironment.self) private var env
 
     var body: some View {
-        List {
+        ReadableList {
             ReportSummarySections(report: report)
             Section("Elementi (\(report.outcomes.count))") {
                 ForEach(report.outcomes) { outcome in
@@ -242,7 +242,8 @@ struct ReportDetailView: View {
                             .foregroundStyle(.secondary)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(outcome.title)
-                                .lineLimit(1)
+                                .lineLimit(2)
+                                .truncationMode(.middle)
                             Text(outcome.state.title)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)

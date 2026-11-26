@@ -50,7 +50,7 @@ struct GroupListView: View {
     @State private var lastReload: Date?
 
     var body: some View {
-        List {
+        ReadableList {
             Section {
                 explanation
                 if entries.contains(where: { !$0.isDecided }) {
@@ -87,6 +87,7 @@ struct GroupListView: View {
                 } label: {
                     GroupRow(entry: entry)
                 }
+                .accessibilityIdentifier("groups.row")
             }
         }
         .navigationTitle(collection.title)
@@ -211,49 +212,76 @@ struct GroupListView: View {
     }
 }
 
+/// Riga di un gruppo: le anteprime grandi su tutta la larghezza, poi quanti sono e cosa si può liberare
+/// in parole semplici. Le scritte vanno a capo invece di tagliarsi.
 private struct GroupRow: View {
     let entry: GroupEntry
 
+    /// "3 foto", "2 video", "4 elementi".
+    private var countText: String {
+        let count = entry.members.count
+        if entry.members.allSatisfy({ $0.isImage }) { return "\(count) foto" }
+        if entry.members.allSatisfy({ $0.isVideo }) { return "\(count) video" }
+        return Format.plural(count, "elemento", "elementi")
+    }
+
+    /// Cosa resta da fare nel gruppo, detto in una frase.
+    private var statusText: String {
+        if entry.isDecided {
+            return "Deciso"
+        }
+        if entry.potentialBytes > 0 {
+            return "Libera fino a \(Format.bytes(entry.potentialBytes))"
+        }
+        return "Scegli tu quale tenere"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 4) {
-                ForEach(entry.members.prefix(4)) { member in
-                    ItemThumbnailView(item: member, pointSide: 70)
-                        .frame(width: 64, height: 64)
-                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            GroupStrip(members: entry.members) { member in
+                badge(for: member)
+            }
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(countText)
+                        .font(.headline)
+                    Text(statusText)
+                        .font(.subheadline.weight(entry.isDecided ? .regular : .semibold))
+                        .foregroundStyle(entry.isDecided ? Theme.keep : Color.primary)
                 }
-                if entry.members.count > 4 {
-                    Text("+\(entry.members.count - 4)")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 44, height: 64)
-                }
+                .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
             }
             // Su più righe se serve: con il testo grande nessuna etichetta esce dallo schermo.
             FlowLayout(spacing: 6, lineSpacing: 4) {
                 TagChip(text: entry.group.kind.title, tint: entry.group.kind == .exactDuplicate ? Theme.keep : Theme.info)
-                if entry.isDecided {
-                    TagChip(text: "Deciso", systemImage: "checkmark", tint: Theme.keep)
-                }
-                Text("\(entry.members.count) elementi · \(Format.bytes(entry.potentialBytes)) potenziali")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
                 if entry.members.contains(where: { $0.isStarred }) {
-                    Image(systemName: "star.fill")
-                        .font(.caption)
-                        .foregroundStyle(Theme.best)
-                        .accessibilityLabel("con le tue migliori")
+                    TagChip(text: "Con la tua migliore", systemImage: "star.fill", tint: Theme.later)
                 }
             }
             if let note = entry.group.note {
                 Text(note)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(.vertical, 4)
         // I gruppi già decisi restano consultabili, ma passano in secondo piano.
         .opacity(entry.isDecided ? 0.75 : 1)
         .accessibilityElement(children: .combine)
+    }
+
+    /// Un solo segno per anteprima: cestino se è già proposta, stella se è tra le tue migliori,
+    /// scintille se è quella consigliata.
+    @ViewBuilder
+    private func badge(for member: IndexedItem) -> some View {
+        if member.reviewStatus.isQueuedForDeletion {
+            GroupStripBadge(systemImage: "trash.fill", tint: Theme.remove)
+        } else if member.isStarred {
+            GroupStripBadge(systemImage: "star.fill", tint: .black.opacity(0.6), symbolColor: Theme.best)
+        } else if member.id == entry.group.suggestedKeepID {
+            GroupStripBadge(systemImage: "sparkles", tint: Theme.keep)
+        }
     }
 }

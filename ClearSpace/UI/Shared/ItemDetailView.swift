@@ -30,7 +30,7 @@ struct ItemDetailView: View {
     }
 
     private func details(for item: IndexedItem) -> some View {
-        List {
+        ReadableList {
             Section {
                 ItemThumbnailView(item: item, pointSide: 300, fill: false)
                     .frame(height: 220)

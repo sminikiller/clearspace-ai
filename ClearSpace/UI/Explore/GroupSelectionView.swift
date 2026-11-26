@@ -200,6 +200,11 @@ struct GroupSelectionView: View {
                 outcomeView(outcome)
             } else if let group, members.count >= 2 {
                 gallery(group: group, members: members)
+            } else if isDeleting {
+                // Durante l'eliminazione le foto spariscono dall'indice prima che arrivi l'esito: senza
+                // questo per un attimo comparirebbe «Gruppo non più disponibile».
+                ProgressView("Elimino…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ContentUnavailableView(
                     "Gruppo non più disponibile",
@@ -229,7 +234,14 @@ struct GroupSelectionView: View {
             }
         }
         .navigationDestination(item: $comparison) { start in
-            GroupComparisonView(groupID: groupID, initialItemID: start.itemID, showsGalleryButton: false)
+            // Una scelta sull'intero gruppo riporta qui: si vede subito cosa resta e cosa si elimina,
+            // e «Elimina» è a portata di dito.
+            GroupComparisonView(
+                groupID: groupID,
+                initialItemID: start.itemID,
+                closesAfterDecision: true,
+                showsGalleryButton: false
+            )
         }
         .onChange(of: comparison) { _, current in
             guard current == nil else { return }
@@ -241,6 +253,10 @@ struct GroupSelectionView: View {
             }
             if changed {
                 frozenProposal = nil
+                let queued = members.contains { $0.reviewStatus.isQueuedForDeletion }
+                toast = deletesDirectly && queued
+                    ? "Scelta applicata: premi «Elimina» per liberare lo spazio."
+                    : "Scelta applicata."
             }
         }
         .onChange(of: order) { _, newOrder in
@@ -437,23 +453,27 @@ struct GroupSelectionView: View {
     private func actionBar(group: ItemGroup, members: [IndexedItem], choice: Choice) -> some View {
         let deleting = members.filter { choice.deletion.contains($0.id) }
         let keepCount = members.count - deleting.count
+        let bytes = deleting.reduce(Int64(0)) { $0 + $1.bytes }
         return VStack(spacing: 8) {
-            Text("\(deleting.count) da eliminare · \(keepCount) da tenere")
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityIdentifier("grid.selectionCount")
-            // Affiancati se ci stanno, uno sopra l'altro con il testo grande.
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) {
-                    keepAllButton(members: members)
-                    primaryButton(deleting: deleting)
+            // Il conteggio a sinistra, lo spazio che si libera a destra: nessuna scritta tagliata.
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("\(deleting.count) da eliminare · \(keepCount) da tenere")
+                    .font(.subheadline.weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("grid.selectionCount")
+                Spacer(minLength: 4)
+                if bytes > 0 {
+                    Text(Format.bytes(bytes))
+                        .font(.subheadline.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(Theme.remove)
+                        .accessibilityLabel("Liberi fino a \(Format.bytes(bytes))")
                 }
-                VStack(spacing: 8) {
-                    primaryButton(deleting: deleting)
-                    keepAllButton(members: members)
-                }
+            }
+            // Sempre affiancati e con scritte brevi: la barra non cambia forma a ogni tocco e le scritte
+            // si leggono intere anche con il testo grande.
+            HStack(spacing: 8) {
+                keepAllButton(members: members)
+                primaryButton(deleting: deleting)
             }
             if !deletesDirectly {
                 Text("Le foto scartate passano alla Revisione, come le altre scelte della pulizia.")
@@ -471,19 +491,15 @@ struct GroupSelectionView: View {
     }
 
     private func primaryButton(deleting: [IndexedItem]) -> some View {
-        let bytes = deleting.reduce(Int64(0)) { $0 + $1.bytes }
-        let title: String
-        if deleting.isEmpty {
-            title = deletesDirectly ? "Elimina" : "Scarta"
-        } else if deletesDirectly {
-            title = "Elimina \(deleting.count) · \(Format.bytes(bytes))"
-        } else {
-            title = "Scarta \(deleting.count) · \(Format.bytes(bytes))"
-        }
+        // Lo spazio è già scritto sopra, nel conteggio: qui basta il numero, che entra sempre.
+        let verb = deletesDirectly ? "Elimina" : "Scarta"
+        let title = deleting.isEmpty ? verb : "\(verb) \(deleting.count)"
+        // Eliminare tutto il gruppo non lascia nessuna copia: ClearSpace lo fa notare prima di iOS.
+        let emptiesGroup = !deleting.isEmpty && deleting.count == members.count
         return Button {
             if !deletesDirectly {
                 proposeForReview(deletion: Set(deleting.map { $0.id }))
-            } else if env.needsInAppConfirmation(deleting) {
+            } else if env.needsInAppConfirmation(deleting) || emptiesGroup {
                 confirmsDeletion = true
             } else {
                 // Per foto e video basta la conferma di iOS, che mostra quante ne verranno eliminate.
@@ -495,9 +511,8 @@ struct GroupSelectionView: View {
                     ProgressView()
                         .tint(.white)
                 } else {
-                    Label(title, systemImage: "trash")
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+                    ButtonTitle(title, systemImage: "trash")
+                        .multilineTextAlignment(.center)
                 }
             }
             .frame(maxWidth: .infinity)
@@ -515,8 +530,7 @@ struct GroupSelectionView: View {
             keepAll(members)
         } label: {
             Text(isMasculine ? "Tieni tutti" : "Tieni tutte")
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
+                .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(.bordered)
@@ -548,6 +562,11 @@ struct GroupSelectionView: View {
         let deleting = members.filter { choice.deletion.contains($0.id) }
         let bytes = deleting.reduce(Int64(0)) { $0 + $1.bytes }
         var parts: [String] = []
+        if !deleting.isEmpty && deleting.count == members.count {
+            parts.append(isMasculine
+                         ? "Elimini tutto il gruppo: non ne resterà nessuno."
+                         : "Elimini tutto il gruppo: non ne resterà nessuna.")
+        }
         if deleting.allSatisfy({ $0.source == .photoLibrary }) {
             parts.append("Liberi fino a \(Format.bytes(bytes)). Restano 30 giorni in «Eliminati di recente» dell'app Foto e con Foto di iCloud spariscono anche dagli altri dispositivi.")
         } else {
@@ -686,7 +705,7 @@ struct GroupSelectionView: View {
     /// Dopo un'eliminazione fuori dalla revisione gruppo per gruppo: cosa è successo e come liberare
     /// davvero lo spazio.
     private func outcomeView(_ decision: GroupDecision) -> some View {
-        List {
+        ReadableList {
             Section {
                 VStack(spacing: 10) {
                     Image(systemName: "checkmark.circle.fill")
@@ -885,6 +904,7 @@ private struct GroupGridCell: View {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .strokeBorder(deletes ? Theme.remove : Color.clear, lineWidth: 3)
             }
+            .thumbnailBadgeText()
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(spokenDescription)
             .accessibilityAddTraits(deletes ? [.isSelected] : [])

@@ -55,7 +55,7 @@ struct OrganizeView: View {
     }
 
     private var content: some View {
-        List {
+        ReadableList {
             Section("Cartella") {
                 if env.folders.folders.isEmpty {
                     Text("Aggiungi prima una cartella dalla sezione Documenti.")
@@ -262,7 +262,7 @@ struct ArchiveWizardView: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            ReadableList {
                 Section {
                     InfoBanner(text: "Crea una copia dei contenuti prima di eliminarli. Ogni copia viene confrontata con l'originale (SHA-256): solo quelle identiche sono considerate riuscite.")
                 }
@@ -311,7 +311,8 @@ struct ArchiveWizardView: View {
                                     .foregroundStyle(result.succeeded ? Theme.keep : Theme.remove)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(result.title)
-                                        .lineLimit(1)
+                                        .lineLimit(2)
+                                        .truncationMode(.middle)
                                     Text(result.message)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)

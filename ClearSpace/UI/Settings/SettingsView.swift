@@ -14,7 +14,7 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            ReadableForm {
                 analysisSection
                 similaritySection
                 reviewSection
@@ -221,7 +221,7 @@ struct ProtectionSettingsView: View {
     private var rules: ProtectionRules { env.preferences.values.protection }
 
     var body: some View {
-        List {
+        ReadableList {
             Section {
                 Toggle("Proteggi i preferiti", isOn: env.preferences.binding(\.protection.protectFavorites))
                 Toggle("Proteggi le foto nascoste", isOn: env.preferences.binding(\.protection.protectHidden))

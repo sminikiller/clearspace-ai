@@ -181,10 +181,14 @@ final class SessionManager {
 
     /// Registra la scelta sull'elemento corrente e passa al successivo.
     /// Restituisce l'esito: se l'elemento è protetto la scelta "elimina" viene rifiutata e nulla cambia.
+    /// - Parameter expectedItemID: l'elemento su cui l'utente ha fatto il gesto. Se nel frattempo la carta
+    ///   è cambiata (ad esempio l'elemento è sparito durante l'animazione), la scelta non viene applicata a
+    ///   un altro elemento.
     @discardableResult
-    func decide(_ choice: SwipeChoice) -> MarkResult? {
+    func decide(_ choice: SwipeChoice, expectedItemID: UUID? = nil) -> MarkResult? {
         guard let index = activeIndex,
               let itemID = sessions[index].currentItemID,
+              expectedItemID == nil || expectedItemID == itemID,
               let item = store.item(itemID) else {
             return nil
         }

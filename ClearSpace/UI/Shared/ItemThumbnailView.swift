@@ -64,22 +64,25 @@ struct ItemTile: View {
     var body: some View {
         ItemThumbnailView(item: item)
             .aspectRatio(1, contentMode: .fit)
+            // Fondo scuro sotto ogni scritta: si legge anche sulle foto chiare.
             .overlay(alignment: .bottomLeading) {
                 Text(Format.bytesOrUnknown(item.estimatedBytes))
-                    .font(.caption2.weight(.semibold))
+                    .font(.caption2.weight(.semibold).monospacedDigit())
+                    .lineLimit(1)
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
-                    .background(.black.opacity(0.55), in: Capsule())
+                    .background(.black.opacity(0.68), in: Capsule())
                     .foregroundStyle(.white)
                     .padding(4)
             }
             .overlay(alignment: .bottomTrailing) {
                 if item.duration > 0 && (item.isVideo || item.category == .audio) {
                     Text(Format.duration(item.duration))
-                        .font(.caption2.weight(.semibold))
+                        .font(.caption2.weight(.semibold).monospacedDigit())
+                        .lineLimit(1)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
-                        .background(.black.opacity(0.55), in: Capsule())
+                        .background(.black.opacity(0.68), in: Capsule())
                         .foregroundStyle(.white)
                         .padding(4)
                 }
@@ -129,6 +132,9 @@ struct ItemTile: View {
             }
             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             .contentShape(Rectangle())
+            // Le scritte sull'anteprima restano piccole anche con il testo grande: non coprono la foto e
+            // non si sovrappongono tra loro. Gli stessi dati sono nella descrizione per VoiceOver.
+            .thumbnailBadgeText()
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(accessibilityDescription)
             .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)

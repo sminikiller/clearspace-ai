@@ -10,7 +10,7 @@ struct TripsView: View {
     @State private var isLoading = true
 
     var body: some View {
-        List {
+        ReadableList {
             Section {
                 InfoBanner(text: "I viaggi sono riconosciuti dalle posizioni salvate nelle foto. Servono a rivedere insieme i contenuti di uno stesso periodo.")
             }

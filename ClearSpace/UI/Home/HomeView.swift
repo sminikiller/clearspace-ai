@@ -523,7 +523,7 @@ struct HomeView: View {
             Text(subtitle)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
             Text("\(Format.count(stat.count)) · \(Format.bytes(stat.bytes))")
                 .font(.caption.weight(.semibold))
         }

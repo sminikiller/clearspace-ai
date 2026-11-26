@@ -45,29 +45,29 @@ struct ReleaseNote: Identifiable {
 
     static let current: [ReleaseNote] = [
         ReleaseNote(
-            systemImage: "hand.draw",
-            title: "Le griglie scorrono sempre",
-            text: "Scorrimento e selezione si decidono prima che la griglia si muova: un gesto verticale o storto scorre sempre, la selezione parte solo trascinando di lato su una foto, e nulla può più restare bloccato. Durante l'analisi gli elenchi non si riordinano più sotto il dito."
-        ),
-        ReleaseNote(
-            systemImage: "wand.and.stars",
-            title: "Tutti i gruppi in una volta",
-            text: "Nelle Foto simili «Tieni la migliore in tutti i gruppi» mostra ogni gruppo con la foto che resta e quelle da eliminare: escludi quelli da lasciare stare ed elimini il resto con una sola conferma."
-        ),
-        ReleaseNote(
-            systemImage: "flag.checkered",
-            title: "Da dove iniziare",
-            text: "La Home mostra subito dove c'è più spazio da liberare (foto simili, duplicati, video grandi, screenshot vecchi, foto sfocate) e ti porta lì con un tocco."
-        ),
-        ReleaseNote(
-            systemImage: "trash",
-            title: "Elimina direttamente, con una sola conferma",
-            text: "Per foto e video basta la conferma di iOS, nella galleria di un gruppo come nelle griglie: dopo «Seleziona» c'è «Elimina». ClearSpace chiede anche la sua solo per file, contenuti importanti o selezioni molto grandi."
+            systemImage: "textformat.size",
+            title: "Scritte sempre intere",
+            text: "Con il testo grande le righe con un'icona restano in colonna accanto all'icona, invece di andare a capo sotto e sembrare spostate a sinistra. Nei gruppi nessun pulsante taglia più le scritte: lo spazio da liberare è accanto al conteggio e «Elimina» mostra solo il numero."
         ),
         ReleaseNote(
             systemImage: "square.grid.2x2",
-            title: "Foto più grandi nei gruppi piccoli",
-            text: "Nei gruppi fino a quattro scatti la galleria usa due colonne: si giudicano senza aprirli. Le scelte non cambiano più da sole se il consiglio si aggiorna mentre decidi."
+            title: "Gruppi più chiari",
+            text: "Nell'elenco dei gruppi le anteprime sono più grandi e occupano tutta la riga: le scintille indicano la consigliata, la stella le tue migliori, il cestino quelle già proposte. Sotto leggi quante sono e quanto spazio puoi liberare."
+        ),
+        ReleaseNote(
+            systemImage: "rectangle.split.2x1",
+            title: "Dal confronto alla galleria",
+            text: "Nel confronto «Tieni solo la migliore», «Tieni solo questa» e «Tieni tutte» ti riportano alla galleria del gruppo con la scelta già fatta: «Elimina» è subito a portata di dito."
+        ),
+        ReleaseNote(
+            systemImage: "exclamationmark.shield",
+            title: "Nessun gruppo svuotato per sbaglio",
+            text: "Se scegli di eliminare tutte le foto di un gruppo, ClearSpace te lo fa notare prima della conferma di iOS."
+        ),
+        ReleaseNote(
+            systemImage: "photo",
+            title: "Anteprime leggibili",
+            text: "Dimensioni e durate sulle anteprime hanno un fondo più scuro e restano piccole anche con il testo grande: si leggono su ogni foto e non la coprono. Nello swipe «Chiudi» e «Revisione» sono icone, così il titolo della sessione si legge intero."
         )
     ]
 }
@@ -92,7 +92,7 @@ struct AppLogoView: View {
 /// Chi ha creato l'app, crediti, tecnologie, privacy e versione.
 struct AboutView: View {
     var body: some View {
-        List {
+        ReadableList {
             Section {
                 VStack(spacing: 10) {
                     AppLogoView()
@@ -241,7 +241,7 @@ struct WhatsNewView: View {
     var onClose: () -> Void = {}
 
     var body: some View {
-        List {
+        ReadableList {
             Section {
                 VStack(spacing: 8) {
                     AppLogoView(side: 72)
@@ -303,7 +303,7 @@ struct WhatsNewView: View {
 /// Come si usa l'app, in breve: gesti, foto simili, selezione rapida, revisione, foto sfocate.
 struct QuickGuideView: View {
     var body: some View {
-        List {
+        ReadableList {
             Section("Swipe") {
                 guideRow("hand.point.right", "Verso destra", "Conservi l'elemento.")
                 guideRow("hand.point.left", "Verso sinistra", "Lo proponi per l'eliminazione: va nella lista di Revisione, non viene cancellato.")
@@ -319,7 +319,7 @@ struct QuickGuideView: View {
                 guideRow("rectangle.stack.badge.play", "Un gruppo dopo l'altro", "Sotto, «Decidi un gruppo dopo l'altro»: dopo «Elimina» o «Tieni tutte» compare da solo il gruppo successivo. «Salta» lo lascia da decidere. Dalla Home ci arrivi da «Da dove iniziare».")
                 guideRow("star.fill", "Stella", "Segna le tue migliori: restano sempre e nella galleria hanno già il segno verde.")
                 guideRow("sparkles", "Consiglio", "Le scintille indicano lo scatto che l'app ritiene migliore, con il motivo: nitidezza, volti, occhi aperti, esposizione.")
-                guideRow("rectangle.split.2x1", "Confronta", "Guarda le foto in grande una dopo l'altra, con lo zoom che resta sullo stesso punto.")
+                guideRow("rectangle.split.2x1", "Confronta", "Guarda le foto in grande una dopo l'altra, con lo zoom che resta sullo stesso punto. «Tieni solo la migliore» ti riporta alla galleria, pronta per «Elimina».")
             }
 
             Section("Revisione e sicurezza") {

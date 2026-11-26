@@ -48,7 +48,7 @@ struct DeletionConfirmationView: View {
     }
 
     private var form: some View {
-        List {
+        ReadableList {
             Section("Cosa verrà eliminato") {
                 if plan.libraryCount > 0 {
                     Label {
@@ -152,7 +152,8 @@ struct DeletionConfirmationView: View {
                             Image(systemName: entry.category.systemImage)
                                 .foregroundStyle(.secondary)
                             Text(entry.title)
-                                .lineLimit(1)
+                                .lineLimit(2)
+                                .truncationMode(.middle)
                             Spacer()
                             Text(Format.bytes(max(entry.deviceBytes, entry.cloudBytes)))
                                 .font(.caption)
@@ -230,7 +231,7 @@ struct DeletionConfirmationView: View {
     }
 
     private func resultView(_ report: CleanupReport) -> some View {
-        List {
+        ReadableList {
             ReportSummarySections(report: report)
             if report.recentlyDeletedCount > 0 {
                 RecentlyDeletedSection(count: report.recentlyDeletedCount, deviceBytes: report.recentlyDeletedDeviceBytes)
@@ -360,7 +361,8 @@ struct ReportSummarySections: View {
                 ForEach(problems) { outcome in
                     VStack(alignment: .leading, spacing: 2) {
                         Text(outcome.title)
-                            .lineLimit(1)
+                            .lineLimit(2)
+                            .truncationMode(.middle)
                         Text("\(outcome.state.title) · \(outcome.message ?? "")")
                             .font(.caption)
                             .foregroundStyle(.secondary)
